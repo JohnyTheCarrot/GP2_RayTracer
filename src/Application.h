@@ -4,8 +4,18 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <array>
+#include <optional>
 #include <string_view>
 #include <vector>
+
+struct QueueFamilyIndices {
+	std::optional<uint32_t> graphicsFamily;
+
+	[[nodiscard]]
+	bool IsComplete() const noexcept {
+		return graphicsFamily.has_value();
+	}
+};
 
 class Application final {
 public:
@@ -31,6 +41,10 @@ private:
 
 	void SetupDebugMessenger();
 
+	void PickPhysicalDevice();
+
+	static QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
+
 	// Static
 	[[nodiscard]]
 	static bool CheckValidationLayerSupport();
@@ -52,6 +66,9 @@ private:
 
 	static void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo);
 
+	[[nodiscard]]
+	static bool IsDeviceSuitable(VkPhysicalDevice device);
+
 #ifdef NDEBUG
 	static constexpr bool ENABLE_VALIDATION_LAYERS{false};
 #else
@@ -65,6 +82,7 @@ private:
 	VkInstance               m_Instance{};
 	VkDebugUtilsMessengerEXT m_DebugMessenger{};
 	GLFWwindow              *m_pWindow{};
+	VkPhysicalDevice         m_PhysicalDevice{VK_NULL_HANDLE};
 };
 
 

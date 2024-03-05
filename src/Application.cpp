@@ -25,6 +25,7 @@ void Application::InitWindow() {
 void Application::InitVulkan() {
 	CreateInstance();
 	SetupDebugMessenger();
+	PickPhysicalDevice();
 }
 
 void Application::MainLoop() {
@@ -147,7 +148,9 @@ VkBool32 Application::DebugCallback(
         VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,
         const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData
 ) {
-	std::cerr << "Validation layer: " << pCallbackData->pMessage << '\n';
+	std::ostream &ostream{messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT ? std::cerr : std::cout};
+
+	ostream << "Validation layer: " << pCallbackData->pMessage << '\n';
 
 	return VK_FALSE;
 }
@@ -163,6 +166,24 @@ void Application::SetupDebugMessenger() {
 	    result != VK_SUCCESS) {
 		throw std::runtime_error{std::string{"Failed to set up debug messenger: "} + string_VkResult(result)};
 	}
+}
+
+void Application::PickPhysicalDevice() {
+	uint32_t deviceCount;
+	vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr);
+
+	if (deviceCount == 0) {
+		throw std::runtime_error{"Failed to find GPUs with Vulkan support."};
+	}
+
+	std::vector<VkPhysicalDevice> devices(deviceCount);
+	vkEnumeratePhysicalDevices(m_Instance, &deviceCount, devices.data());
+
+	const auto firstSuitableDeviceIterator{std::find_if(devices.cbegin(), devices.cend(), IsDeviceSuitable)};
+	if (firstSuitableDeviceIterator == devices.cend())
+		throw std::runtime_error{"Failed to find a suitable GPU"};
+
+	m_PhysicalDevice = *firstSuitableDeviceIterator;
 }
 
 VkResult Application::CreateDebugUtilsMessengerEXT(
@@ -202,4 +223,37 @@ void Application::PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateIn
 	                         VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
 	createInfo.pfnUserCallback = DebugCallback;
 	createInfo.pUserData       = nullptr;
+}
+
+bool Application::IsDeviceSuitable(VkPhysicalDevice device) {
+	VkPhysicalDeviceProperties deviceProperties;
+	vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+	VkPhysicalDeviceFeatures deviceFeatures{};
+	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+	return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader &&
+	       FindQueueFamilies(device).IsComplete();
+}
+
+QueueFamilyIndices Application::FindQueueFamilies(VkPhysicalDevice device) {
+	QueueFamilyIndices indices;
+
+	uint32_t queueFamilyCount{0};
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+	for (int idx{}; idx < queueFamilies.size(); ++idx) {
+		if (queueFamilies[idx].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			indices.graphicsFamily = idx;
+		}
+
+		if (indices.IsComplete()) {
+			break;
+		}
+	}
+
+	return indices;
 }
