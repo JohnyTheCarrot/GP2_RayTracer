@@ -10,10 +10,11 @@
 
 struct QueueFamilyIndices {
 	std::optional<uint32_t> graphicsFamily;
+	std::optional<uint32_t> presentFamily{};
 
 	[[nodiscard]]
 	bool IsComplete() const noexcept {
-		return graphicsFamily.has_value();
+		return graphicsFamily.has_value() && presentFamily.has_value();
 	}
 };
 
@@ -43,7 +44,14 @@ private:
 
 	void PickPhysicalDevice();
 
-	static QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
+	void CreateLogicalDevice();
+
+	void CreateSurface();
+
+	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
+
+	[[nodiscard]]
+	bool IsDeviceSuitable(VkPhysicalDevice device);
 
 	// Static
 	[[nodiscard]]
@@ -66,9 +74,6 @@ private:
 
 	static void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo);
 
-	[[nodiscard]]
-	static bool IsDeviceSuitable(VkPhysicalDevice device);
-
 #ifdef NDEBUG
 	static constexpr bool ENABLE_VALIDATION_LAYERS{false};
 #else
@@ -83,6 +88,10 @@ private:
 	VkDebugUtilsMessengerEXT m_DebugMessenger{};
 	GLFWwindow              *m_pWindow{};
 	VkPhysicalDevice         m_PhysicalDevice{VK_NULL_HANDLE};
+	VkDevice                 m_Device{};
+	VkSurfaceKHR             m_Surface{};
+	VkQueue                  m_GraphicsQueue{};
+	VkQueue                  m_PresentQueue{};
 };
 
 
