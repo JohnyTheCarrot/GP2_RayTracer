@@ -56,6 +56,8 @@ private:
 
 	void CreateSwapChain();
 
+	void CreateImageViews();
+
 	[[nodiscard]]
 	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
 
@@ -121,6 +123,7 @@ private:
 	std::vector<VkImage>     m_SwapChainImages{};
 	VkFormat                 m_SwapChainImageFormat{};
 	VkExtent2D               m_SwapChainExtent{};
+	std::vector<VkImageView> m_SwapChainImageViews{};
 };
 
 
