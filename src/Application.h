@@ -41,6 +41,8 @@ private:
 
 	void MainLoop();
 
+	void DrawFrame();
+
 	void Cleanup();
 
 	// Helper
@@ -61,6 +63,16 @@ private:
 	void CreateGraphicsPipeline();
 
 	void CreateRenderPass();
+
+	void CreateFramebuffers();
+
+	void CreateCommandPool();
+
+	void CreateCommandBuffer();
+
+	void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
+	void CreateSyncObjects();
 
 	[[nodiscard]]
 	VkShaderModule CreateShaderModule(std::vector<char> &&code);
@@ -121,22 +133,28 @@ private:
 	static constexpr std::array<const char *, 1> VALIDATION_LAYERS{"VK_LAYER_KHRONOS_validation"};
 	static constexpr std::array<const char *, 1> DEVICE_EXTENSIONS{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-	VkInstance               m_Instance{};
-	VkDebugUtilsMessengerEXT m_DebugMessenger{};
-	GLFWwindow              *m_pWindow{};
-	VkPhysicalDevice         m_PhysicalDevice{VK_NULL_HANDLE};
-	VkDevice                 m_Device{};
-	VkSurfaceKHR             m_Surface{};
-	VkQueue                  m_GraphicsQueue{};
-	VkQueue                  m_PresentQueue{};
-	VkSwapchainKHR           m_SwapChain{};
-	std::vector<VkImage>     m_SwapChainImages{};
-	VkFormat                 m_SwapChainImageFormat{};
-	VkExtent2D               m_SwapChainExtent{};
-	std::vector<VkImageView> m_SwapChainImageViews{};
-	VkRenderPass             m_RenderPass{};
-	VkPipelineLayout         m_PipelineLayout{};
-	VkPipeline               m_GraphicsPipeline{};
+	VkInstance                 m_Instance{};
+	VkDebugUtilsMessengerEXT   m_DebugMessenger{};
+	GLFWwindow                *m_pWindow{};
+	VkPhysicalDevice           m_PhysicalDevice{VK_NULL_HANDLE};
+	VkDevice                   m_Device{};
+	VkSurfaceKHR               m_Surface{};
+	VkQueue                    m_GraphicsQueue{};
+	VkQueue                    m_PresentQueue{};
+	VkSwapchainKHR             m_SwapChain{};
+	std::vector<VkImage>       m_SwapChainImages{};
+	VkFormat                   m_SwapChainImageFormat{};
+	VkExtent2D                 m_SwapChainExtent{};
+	std::vector<VkImageView>   m_SwapChainImageViews{};
+	VkRenderPass               m_RenderPass{};
+	VkPipelineLayout           m_PipelineLayout{};
+	VkPipeline                 m_GraphicsPipeline{};
+	std::vector<VkFramebuffer> m_SwapChainFramebuffers{};
+	VkCommandPool              m_CommandPool{};
+	VkCommandBuffer            m_CommandBuffer{};
+	VkSemaphore                m_ImageAvailableSemaphore{};
+	VkSemaphore                m_RenderFinishedSemaphore{};
+	VkFence                    m_InFlightFence{};
 };
 
 
