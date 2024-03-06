@@ -9,13 +9,19 @@
 #include <vector>
 
 struct QueueFamilyIndices {
-	std::optional<uint32_t> graphicsFamily;
+	std::optional<uint32_t> graphicsFamily{};
 	std::optional<uint32_t> presentFamily{};
 
 	[[nodiscard]]
 	bool IsComplete() const noexcept {
 		return graphicsFamily.has_value() && presentFamily.has_value();
 	}
+};
+
+struct SwapChainSupportDetails {
+	VkSurfaceCapabilitiesKHR        capabilities{};
+	std::vector<VkSurfaceFormatKHR> formats{};
+	std::vector<VkPresentModeKHR>   presentModes{};
 };
 
 class Application final {
@@ -48,14 +54,29 @@ private:
 
 	void CreateSurface();
 
+	void CreateSwapChain();
+
+	[[nodiscard]]
 	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
+
+	[[nodiscard]]
+	SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
 
 	[[nodiscard]]
 	bool IsDeviceSuitable(VkPhysicalDevice device);
 
+	[[nodiscard]]
+	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
+
 	// Static
 	[[nodiscard]]
 	static bool CheckValidationLayerSupport();
+
+	[[nodiscard]]
+	static VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats);
+
+	[[nodiscard]]
+	static VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes);
 
 	static void PrintAvailableExtensions();
 
@@ -74,6 +95,9 @@ private:
 
 	static void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo);
 
+	[[nodiscard]]
+	static bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
+
 #ifdef NDEBUG
 	static constexpr bool ENABLE_VALIDATION_LAYERS{false};
 #else
@@ -83,6 +107,7 @@ private:
 	static constexpr int                         WINDOW_WIDTH{800}, WINDOW_HEIGHT{600};
 	static constexpr std::string_view            WINDOW_TITLE{"Vulkan"};
 	static constexpr std::array<const char *, 1> VALIDATION_LAYERS{"VK_LAYER_KHRONOS_validation"};
+	static constexpr std::array<const char *, 1> DEVICE_EXTENSIONS{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 	VkInstance               m_Instance{};
 	VkDebugUtilsMessengerEXT m_DebugMessenger{};
@@ -92,6 +117,10 @@ private:
 	VkSurfaceKHR             m_Surface{};
 	VkQueue                  m_GraphicsQueue{};
 	VkQueue                  m_PresentQueue{};
+	VkSwapchainKHR           m_SwapChain{};
+	std::vector<VkImage>     m_SwapChainImages{};
+	VkFormat                 m_SwapChainImageFormat{};
+	VkExtent2D               m_SwapChainExtent{};
 };
 
 
