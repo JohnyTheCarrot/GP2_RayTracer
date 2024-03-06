@@ -4,9 +4,21 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <array>
+#include <glm\glm.hpp>
 #include <optional>
 #include <string_view>
 #include <vector>
+
+// TODO: avoid vkAllocateMemory calls, instead group with custom allocator and use an offset
+
+struct Vertex {
+	glm::vec2 pos{};
+	glm::vec3 color{};
+
+	constexpr static VkVertexInputBindingDescription GetBindingDescription();
+
+	constexpr static std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescriptions();
+};
 
 struct QueueFamilyIndices {
 	std::optional<uint32_t> graphicsFamily{};
@@ -78,6 +90,19 @@ private:
 
 	void CleanupSwapChain();
 
+	void CreateVertexBuffer();
+
+	void CreateIndexBuffer();
+
+	void CreateBuffer(
+	        VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer,
+	        VkDeviceMemory &bufferMemory
+	);
+
+	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+
+	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
 	[[nodiscard]]
 	VkShaderModule CreateShaderModule(std::vector<char> &&code);
 
@@ -146,7 +171,12 @@ private:
 	        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
 	        VK_KHR_SPIRV_1_4_EXTENSION_NAME
 	};
-	static constexpr int MAX_FRAMES_IN_FLIGHT{2};
+	static constexpr int                   MAX_FRAMES_IN_FLIGHT{2};
+	static constexpr std::array<Vertex, 4> VERTICES{
+	        Vertex{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}}, Vertex{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+	        Vertex{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}, Vertex{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+	};
+	static constexpr std::array<uint16_t, 6> INDICES{0, 1, 2, 2, 3, 0};
 
 	VkInstance                 m_Instance{};
 	VkDebugUtilsMessengerEXT   m_DebugMessenger{};
@@ -168,6 +198,10 @@ private:
 	VkCommandPool              m_CommandPool{};
 	uint32_t                   m_CurrentFrame{0};
 	bool                       m_FramebufferResized{false};
+	VkBuffer                   m_VertexBuffer{};
+	VkDeviceMemory             m_VertexBufferMemory{};
+	VkBuffer                   m_IndexBuffer{};
+	VkDeviceMemory             m_IndexBufferMemory{};
 
 	std::array<VkCommandBuffer, MAX_FRAMES_IN_FLIGHT> m_CommandBuffers{};
 	std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT>     m_ImageAvailableSemaphores{};

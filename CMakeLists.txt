@@ -49,11 +49,24 @@ add_custom_target(
         DEPENDS ${SPIRV_BINARY_FILES}
 )
 
+# add glm
+FetchContent_Declare(
+        glm
+        URL https://github.com/g-truc/glm/releases/download/0.9.9.8/glm-0.9.9.8.zip
+        DOWNLOAD_NO_PROGRESS ON
+        DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/downloads
+)
+
+FetchContent_GetProperties(glm)
+if (NOT glm_POPULATED)
+    FetchContent_Populate(glm)
+endif ()
+
 add_executable(${PROJECT_NAME} ${SRC_FILES} ${GLSL_SOURCE_FILES})
 
 add_dependencies(${PROJECT_NAME} Shaders)
 
-target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${glm_SOURCE_DIR})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE ${Vulkan_LIBRARIES} glfw)
 
