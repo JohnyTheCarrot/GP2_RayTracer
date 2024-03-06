@@ -68,7 +68,7 @@ private:
 
 	void CreateCommandPool();
 
-	void CreateCommandBuffer();
+	void CreateCommandBuffers();
 
 	void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
@@ -140,6 +140,7 @@ private:
 	        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
 	        VK_KHR_SPIRV_1_4_EXTENSION_NAME
 	};
+	static constexpr int MAX_FRAMES_IN_FLIGHT{2};
 
 	VkInstance                 m_Instance{};
 	VkDebugUtilsMessengerEXT   m_DebugMessenger{};
@@ -159,10 +160,12 @@ private:
 	VkPipeline                 m_GraphicsPipeline{};
 	std::vector<VkFramebuffer> m_SwapChainFramebuffers{};
 	VkCommandPool              m_CommandPool{};
-	VkCommandBuffer            m_CommandBuffer{};
-	VkSemaphore                m_ImageAvailableSemaphore{};
-	VkSemaphore                m_RenderFinishedSemaphore{};
-	VkFence                    m_InFlightFence{};
+	uint32_t                   m_CurrentFrame{0};
+
+	std::array<VkCommandBuffer, MAX_FRAMES_IN_FLIGHT> m_CommandBuffers{};
+	std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT>     m_ImageAvailableSemaphores{};
+	std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT>     m_RenderFinishedSemaphores{};
+	std::array<VkFence, MAX_FRAMES_IN_FLIGHT>         m_InFlightFences{};
 };
 
 
