@@ -102,7 +102,7 @@ private:
 	[[nodiscard]]
 	static VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes);
 
-	static void PrintAvailableExtensions();
+	static void PrintAvailableInstanceExtensions();
 
 	[[nodiscard]]
 	static std::vector<const char *> GetRequiredExtensions();
@@ -131,7 +131,15 @@ private:
 	static constexpr int                         WINDOW_WIDTH{800}, WINDOW_HEIGHT{600};
 	static constexpr std::string_view            WINDOW_TITLE{"Vulkan"};
 	static constexpr std::array<const char *, 1> VALIDATION_LAYERS{"VK_LAYER_KHRONOS_validation"};
-	static constexpr std::array<const char *, 1> DEVICE_EXTENSIONS{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+	static constexpr std::array<const char *, 0> INSTANCE_EXTENSIONS{};
+	static constexpr std::array<const char *, 6> DEVICE_EXTENSIONS{
+	        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+	        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+	        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+	        VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
+	        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+	        VK_KHR_SPIRV_1_4_EXTENSION_NAME
+	};
 
 	VkInstance                 m_Instance{};
 	VkDebugUtilsMessengerEXT   m_DebugMessenger{};

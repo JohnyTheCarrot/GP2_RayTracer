@@ -144,7 +144,7 @@ void Application::CreateInstance() {
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.pEngineName        = "Roingus Engine";
 	appInfo.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
-	appInfo.apiVersion         = VK_API_VERSION_1_0;
+	appInfo.apiVersion         = VK_API_VERSION_1_3;
 
 	VkInstanceCreateInfo createInfo{};
 	createInfo.sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -170,7 +170,7 @@ void Application::CreateInstance() {
 		createInfo.pNext = nullptr;
 	}
 
-	PrintAvailableExtensions();
+	PrintAvailableInstanceExtensions();
 
 	const auto extensions{GetRequiredExtensions()};
 	createInfo.enabledExtensionCount   = static_cast<uint32_t>(extensions.size());
@@ -223,19 +223,12 @@ bool Application::CheckValidationLayerSupport() {
 	return true;
 }
 
-void Application::PrintAvailableExtensions() {
+void Application::PrintAvailableInstanceExtensions() {
 	uint32_t extensionCount{};
 	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
 
 	std::vector<VkExtensionProperties> extensions(extensionCount);
 	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
-
-	std::cout << "Available extensions:\n";
-
-	std::transform(
-	        extensions.cbegin(), extensions.cend(), std::ostream_iterator<const char *>{std::cout, "\n"},
-	        [](const VkExtensionProperties &ext) { return ext.extensionName; }
-	);
 }
 
 std::vector<const char *> Application::GetRequiredExtensions() {
@@ -247,6 +240,8 @@ std::vector<const char *> Application::GetRequiredExtensions() {
 	if (ENABLE_VALIDATION_LAYERS) {
 		extensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
+
+	extensions.insert(extensions.end(), INSTANCE_EXTENSIONS.cbegin(), INSTANCE_EXTENSIONS.cend());
 
 	return extensions;
 }
@@ -911,6 +906,15 @@ bool Application::CheckDeviceExtensionSupport(VkPhysicalDevice device) {
 
 	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
 	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+	std::cout << "Available instance extensions:\n";
+
+	std::transform(
+	        availableExtensions.cbegin(), availableExtensions.cend(),
+	        std::ostream_iterator<const char *>{std::cout, "\n"},
+	        [](const VkExtensionProperties &ext) { return ext.extensionName; }
+	);
+	std::cout << '\n';
 
 	std::set<std::string_view> requiredExtensions(DEVICE_EXTENSIONS.cbegin(), DEVICE_EXTENSIONS.cend());
 
