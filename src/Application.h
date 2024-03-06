@@ -58,6 +58,13 @@ private:
 
 	void CreateImageViews();
 
+	void CreateGraphicsPipeline();
+
+	void CreateRenderPass();
+
+	[[nodiscard]]
+	VkShaderModule CreateShaderModule(std::vector<char> &&code);
+
 	[[nodiscard]]
 	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
 
@@ -71,6 +78,9 @@ private:
 	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
 
 	// Static
+	[[nodiscard]]
+	static std::vector<char> ReadFile(std::string_view fileName);
+
 	[[nodiscard]]
 	static bool CheckValidationLayerSupport();
 
@@ -124,6 +134,9 @@ private:
 	VkFormat                 m_SwapChainImageFormat{};
 	VkExtent2D               m_SwapChainExtent{};
 	std::vector<VkImageView> m_SwapChainImageViews{};
+	VkRenderPass             m_RenderPass{};
+	VkPipelineLayout         m_PipelineLayout{};
+	VkPipeline               m_GraphicsPipeline{};
 };
 
 

@@ -25,8 +25,8 @@ include_directories(${Vulkan_INCLUDE_DIRS})
 
 file(GLOB_RECURSE SRC_FILES src/*.cpp)
 
-set(SHADER_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders")
-set(SHADER_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/src/shaders")
+set(SHADER_SOURCE_DIR "shaders")
+set(SHADER_BINARY_DIR "shaders")
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
         "${SHADER_SOURCE_DIR}/*.frag"
