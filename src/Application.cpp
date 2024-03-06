@@ -24,8 +24,10 @@ void Application::Run() {
 void Application::InitWindow() {
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
 	m_pWindow = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE.data(), nullptr, nullptr);
+	glfwSetWindowUserPointer(m_pWindow, this);
+	glfwSetFramebufferSizeCallback(m_pWindow, FramebufferResizeCallback);
 }
 
 void Application::InitVulkan() {
@@ -55,12 +57,26 @@ void Application::MainLoop() {
 
 void Application::DrawFrame() {
 	vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
-	vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
 
 	uint32_t imageIndex{};
-	vkAcquireNextImageKHR(
-	        m_Device, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex
-	);
+	if (const VkResult result{vkAcquireNextImageKHR(
+	            m_Device, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE,
+	            &imageIndex
+	    )};
+	    result != VK_SUCCESS) {
+		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+			RecreateSwapChain();
+			return;
+		}
+
+		if (result != VK_SUBOPTIMAL_KHR) {
+			throw std::runtime_error{
+			        std::string{"Failed to acquire swap chain image from swapchain: "} + string_VkResult(result)
+			};
+		}
+	}
+
+	vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
 
 	vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
 
@@ -99,7 +115,15 @@ void Application::DrawFrame() {
 	presentInfo.pImageIndices  = &imageIndex;
 	presentInfo.pResults       = nullptr;
 
-	vkQueuePresentKHR(m_PresentQueue, &presentInfo);
+	if (const VkResult result{vkQueuePresentKHR(m_PresentQueue, &presentInfo)}; result != VK_SUCCESS) {
+		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_FramebufferResized) {
+			m_FramebufferResized = false;
+			RecreateSwapChain();
+		} else {
+			throw std::runtime_error{std::string{"Failed to present swap chain image: "} + string_VkResult(result)};
+		}
+	}
+
 	m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
@@ -112,17 +136,13 @@ void Application::Cleanup() {
 
 	vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
 
-	for (auto framebuffer: m_SwapChainFramebuffers) { vkDestroyFramebuffer(m_Device, framebuffer, nullptr); }
+	CleanupSwapChain();
 
 	vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
 
 	vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
 
 	vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
-
-	for (auto imageView: m_SwapChainImageViews) { vkDestroyImageView(m_Device, imageView, nullptr); }
-
-	vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr);
 
 	vkDestroyDevice(m_Device, nullptr);
 
@@ -185,6 +205,11 @@ void Application::CreateInstance() {
 	if (const VkResult result{vkCreateInstance(&createInfo, nullptr, &m_Instance)}; result != VK_SUCCESS) {
 		throw std::runtime_error{std::string{"Failed to create instance: "} + string_VkResult(result)};
 	}
+}
+
+void Application::FramebufferResizeCallback(GLFWwindow *pApplication, int width, int height) {
+	auto appPtr{reinterpret_cast<Application *>(pApplication)};
+	appPtr->m_FramebufferResized = true;
 }
 
 std::vector<char> Application::ReadFile(std::string_view fileName) {
@@ -735,6 +760,31 @@ void Application::CreateSyncObjects() {
 			throw std::runtime_error{std::string{"Failed to create fence: "} + string_VkResult(result)};
 		}
 	}
+}
+
+void Application::RecreateSwapChain() {
+	int width, height;
+	glfwGetFramebufferSize(m_pWindow, &width, &height);
+	while (width == 0 || height == 0) {
+		glfwGetFramebufferSize(m_pWindow, &width, &height);
+		glfwWaitEvents();
+	}
+
+	vkDeviceWaitIdle(m_Device);
+
+	CleanupSwapChain();
+
+	CreateSwapChain();
+	CreateImageViews();
+	CreateFramebuffers();
+}
+
+void Application::CleanupSwapChain() {
+	for (auto framebuffer: m_SwapChainFramebuffers) { vkDestroyFramebuffer(m_Device, framebuffer, nullptr); }
+
+	for (auto imageView: m_SwapChainImageViews) { vkDestroyImageView(m_Device, imageView, nullptr); }
+
+	vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr);
 }
 
 VkShaderModule Application::CreateShaderModule(std::vector<char> &&code) {

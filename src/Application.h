@@ -74,6 +74,10 @@ private:
 
 	void CreateSyncObjects();
 
+	void RecreateSwapChain();
+
+	void CleanupSwapChain();
+
 	[[nodiscard]]
 	VkShaderModule CreateShaderModule(std::vector<char> &&code);
 
@@ -90,6 +94,8 @@ private:
 	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
 
 	// Static
+	static void FramebufferResizeCallback(GLFWwindow *pWindow, int width, int height);
+
 	[[nodiscard]]
 	static std::vector<char> ReadFile(std::string_view fileName);
 
@@ -161,6 +167,7 @@ private:
 	std::vector<VkFramebuffer> m_SwapChainFramebuffers{};
 	VkCommandPool              m_CommandPool{};
 	uint32_t                   m_CurrentFrame{0};
+	bool                       m_FramebufferResized{false};
 
 	std::array<VkCommandBuffer, MAX_FRAMES_IN_FLIGHT> m_CommandBuffers{};
 	std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT>     m_ImageAvailableSemaphores{};
