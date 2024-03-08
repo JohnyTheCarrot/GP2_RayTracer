@@ -407,8 +407,8 @@ namespace roing::vk {
 	}
 
 	void Swapchain::CreateGraphicsPipeline() {
-		auto vertShaderCode{ReadFile("shaders/shader.vert.spv")};
-		auto fragShaderCode{ReadFile("shaders/shader.frag.spv")};
+		auto vertShaderCode{utils::ReadFile("shaders/shader.vert.spv")};
+		auto fragShaderCode{utils::ReadFile("shaders/shader.frag.spv")};
 
 		VkShaderModule vertShaderModule{CreateShaderModule(std::move(vertShaderCode))};
 		VkShaderModule fragShaderModule{CreateShaderModule(std::move(fragShaderCode))};

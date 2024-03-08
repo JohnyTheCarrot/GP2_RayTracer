@@ -5,7 +5,7 @@
 #include <string_view>
 #include <vector>
 
-namespace roing::vk {
+namespace roing::utils {
 	[[nodiscard]]
 	static std::vector<char> ReadFile(std::string_view fileName) {
 		std::ifstream file{fileName.data(), std::ios::ate | std::ios::binary};
@@ -24,5 +24,5 @@ namespace roing::vk {
 
 		return buffer;
 	}
-}// namespace roing::vk
+}// namespace roing::utils
 #endif//PORTAL2RAYTRACED_READ_FILE_H

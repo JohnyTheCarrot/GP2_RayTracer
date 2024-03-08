@@ -3,6 +3,7 @@
 
 #define GLFW_INCLUDE_VULKAN
 #include "Vertex.h"
+#include "vk/Buffer.h"
 #include <GLFW/glfw3.h>
 #include <vector>
 
@@ -12,6 +13,12 @@ namespace roing {
 		class Device;
 	}
 
+	struct BlasInput final {
+		std::vector<VkAccelerationStructureGeometryKHR>       accStructGeometry;
+		std::vector<VkAccelerationStructureBuildRangeInfoKHR> accStructBuildOffsetInfo;
+		VkBuildAccelerationStructureFlagsKHR                  flags{0};
+	};
+
 	class Model final {
 	public:
 		Model() = default;
@@ -19,32 +26,33 @@ namespace roing {
 		Model(VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<Vertex> &vertices,
 		      const std::vector<uint32_t> &indices);
 
-		~Model() noexcept;
-
 		Model(const Model &)            = delete;
 		Model &operator=(const Model &) = delete;
 
 		Model(Model &&other) noexcept
 		    : m_Device{other.m_Device}
-		    , m_VertexBuffer{other.m_VertexBuffer}
-		    , m_VertexBufferMemory{other.m_VertexBufferMemory}
-		    , m_IndexBuffer{other.m_IndexBuffer}
-		    , m_IndexBufferMemory{other.m_IndexBufferMemory} {
+		    , m_VertexBuffer{std::move(other.m_VertexBuffer)}
+		    , m_IndexBuffer{std::move(other.m_IndexBuffer)}
+		    , m_IndexCount{other.m_IndexCount}
+		    , m_VertexCount{other.m_VertexCount} {
 			other.m_Device = VK_NULL_HANDLE;
 		}
 
 		Model &operator=(Model &&other) noexcept {
-			m_Device             = other.m_Device;
-			other.m_Device       = VK_NULL_HANDLE;
-			m_VertexBuffer       = other.m_VertexBuffer;
-			m_VertexBufferMemory = other.m_VertexBufferMemory;
-			m_IndexBuffer        = other.m_IndexBuffer;
-			m_IndexBufferMemory  = other.m_IndexBufferMemory;
+			m_Device       = other.m_Device;
+			other.m_Device = VK_NULL_HANDLE;
+			m_VertexBuffer = std::move(other.m_VertexBuffer);
+			m_VertexCount  = other.m_VertexCount;
+			m_IndexBuffer  = std::move(other.m_IndexBuffer);
+			m_IndexCount   = other.m_IndexCount;
 
 			return *this;
 		}
 
 		void DrawModel(VkCommandBuffer commandBuffer) const;
+
+		[[nodiscard]]
+		BlasInput ObjectToVkGeometry() const noexcept;
 
 	private:
 		void
@@ -52,12 +60,11 @@ namespace roing {
 		void
 		CreateIndexBuffer(VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<uint32_t> &indices);
 
-		VkDevice       m_Device{};
-		VkBuffer       m_VertexBuffer{};
-		VkDeviceMemory m_VertexBufferMemory{};
-		VkBuffer       m_IndexBuffer{};
-		VkDeviceMemory m_IndexBufferMemory{};
-		uint32_t       m_IndexCount{};
+		VkDevice   m_Device{};
+		vk::Buffer m_VertexBuffer{};
+		vk::Buffer m_IndexBuffer{};
+		uint32_t   m_VertexCount{};
+		uint32_t   m_IndexCount{};
 	};
 
 }// namespace roing

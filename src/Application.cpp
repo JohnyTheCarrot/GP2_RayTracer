@@ -1,6 +1,7 @@
 #include "Application.h"
 #include "src/vk/PhysicalDeviceUtils.h"
 #include "tiny_obj_loader.h"
+#include "utils/ToTransformMatrixKHR.h"
 #include <vulkan/vk_enum_string_helper.h>
 
 namespace roing {
@@ -30,11 +31,14 @@ namespace roing {
 		m_Swapchain.CreateGraphicsPipeline();
 		m_Swapchain.CreateFramebuffers();
 		m_Device.CreateCommandPool(m_Surface, m_PhysicalDevice);
-		m_Models.emplace_back(m_PhysicalDevice, m_Device, VERTICES, INDICES);
+		const auto &model{m_Models.emplace_back(m_PhysicalDevice, m_Device, VERTICES, INDICES)};
+		m_ModelInstances.emplace_back(&model, glm::mat4(1.0f), 0);
+
 		m_Swapchain.CreateCommandBuffers();
 		m_Swapchain.CreateSyncObjects();
 
 		InitRayTracing();
+		m_Device.SetUpRaytracing(m_PhysicalDevice, m_Models, m_ModelInstances);
 	}
 
 	void Application::MainLoop() {

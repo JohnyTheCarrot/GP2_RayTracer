@@ -3,6 +3,7 @@
 
 #define GLFW_INCLUDE_VULKAN
 #include "Model.h"
+#include "ModelInstance.h"
 #include "Vertex.h"
 #include "vk/Device.h"
 #include "vk/Instance.h"
@@ -43,8 +44,6 @@ namespace roing {
 
 		void InitRayTracing();
 
-		void ObjectToVkGeomtry(const Model &model);
-
 		static constexpr int              WINDOW_WIDTH{800}, WINDOW_HEIGHT{600};
 		static constexpr std::string_view WINDOW_TITLE{"Vulkan"};
 		const std::vector<Vertex>         VERTICES{
@@ -59,7 +58,9 @@ namespace roing {
 		vk::Device    m_Device{};
 		vk::Swapchain m_Swapchain{};
 
-		std::vector<Model>                              m_Models{};
+		std::vector<Model>         m_Models{};
+		std::vector<ModelInstance> m_ModelInstances{};
+
 		VkPhysicalDevice                                m_PhysicalDevice{};
 		std::vector<VkFramebuffer>                      m_SwapChainFramebuffers{};
 		VkPhysicalDeviceRayTracingPipelinePropertiesKHR m_RtProperties{

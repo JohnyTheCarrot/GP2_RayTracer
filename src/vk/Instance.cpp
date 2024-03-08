@@ -205,11 +205,11 @@ namespace roing::vk {
 	}
 
 	bool Instance::IsDeviceSuitable(VkPhysicalDevice device, const Surface &surface) noexcept {
-		VkPhysicalDeviceProperties deviceProperties;
-		vkGetPhysicalDeviceProperties(device, &deviceProperties);
+		VkPhysicalDeviceProperties2 deviceProperties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+		vkGetPhysicalDeviceProperties2(device, &deviceProperties);
 
-		VkPhysicalDeviceFeatures deviceFeatures{};
-		vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+		VkPhysicalDeviceFeatures2 deviceFeatures{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+		vkGetPhysicalDeviceFeatures2(device, &deviceFeatures);
 
 		const bool extensionsSupported{CheckDeviceExtensionSupport(device)};
 
@@ -219,7 +219,8 @@ namespace roing::vk {
 			swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
 		}
 
-		return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader &&
+		return deviceProperties.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+		       deviceFeatures.features.geometryShader &&
 		       vk::physical_device::FindQueueFamilies(surface, device).IsComplete() &&
 		       CheckDeviceExtensionSupport(device) && swapChainAdequate;
 	}
