@@ -2,7 +2,7 @@
 #include <iostream>
 
 int main() {
-	Application application{};
+	roing::Application application{};
 
 	try {
 		application.Run();

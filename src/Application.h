@@ -2,6 +2,13 @@
 #define PORTAL2RAYTRACED_APPLICATION_H
 
 #define GLFW_INCLUDE_VULKAN
+#include "Model.h"
+#include "Vertex.h"
+#include "vk/Device.h"
+#include "vk/Instance.h"
+#include "vk/QueueFamilyIndices.h"
+#include "vk/Surface.h"
+#include "vk/Window.h"
 #include <GLFW/glfw3.h>
 #include <array>
 #include <glm\glm.hpp>
@@ -11,203 +18,66 @@
 
 // TODO: avoid vkAllocateMemory calls, instead group with custom allocator and use an offset
 
-struct Vertex {
-	glm::vec2 pos{};
-	glm::vec3 color{};
+namespace roing {
+	class Model;
 
-	constexpr static VkVertexInputBindingDescription GetBindingDescription();
+	class Application final {
+	public:
+		Application() {
+		}
 
-	constexpr static std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescriptions();
-};
+		void Run();
 
-struct QueueFamilyIndices {
-	std::optional<uint32_t> graphicsFamily{};
-	std::optional<uint32_t> presentFamily{};
+	private:
+		// Main
+		void InitWindow();
 
-	[[nodiscard]]
-	bool IsComplete() const noexcept {
-		return graphicsFamily.has_value() && presentFamily.has_value();
-	}
-};
+		void InitVulkan();
 
-struct SwapChainSupportDetails {
-	VkSurfaceCapabilitiesKHR        capabilities{};
-	std::vector<VkSurfaceFormatKHR> formats{};
-	std::vector<VkPresentModeKHR>   presentModes{};
-};
+		void MainLoop();
 
-class Application final {
-public:
-	void Run();
+		void DrawFrame();
 
-	static VKAPI_ATTR VkBool32 DebugCallback(
-	        VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,
-	        const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData
-	);
+		void Cleanup();
 
-private:
-	// Main
-	void InitWindow();
+		void InitRayTracing();
 
-	void InitVulkan();
+		// Helper
+		void PickPhysicalDevice();
 
-	void MainLoop();
+		void ObjectToVkGeomtry(const Model &model);
 
-	void DrawFrame();
+		[[nodiscard]]
+		VkShaderModule CreateShaderModule(std::vector<char> &&code);
 
-	void Cleanup();
+		[[nodiscard]]
+		bool IsDeviceSuitable(VkPhysicalDevice device);
 
-	// Helper
-	void CreateInstance();
+		// Static
+		[[nodiscard]]
+		static bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 
-	void SetupDebugMessenger();
+		static constexpr int                         WINDOW_WIDTH{800}, WINDOW_HEIGHT{600};
+		static constexpr std::string_view            WINDOW_TITLE{"Vulkan"};
+		static constexpr std::array<const char *, 0> INSTANCE_EXTENSIONS{};
+		const std::vector<Vertex>                    VERTICES{
+                Vertex{{-0.5f, -0.5f, 0.f}, {1.0f, 0.0f, 0.0f}}, Vertex{{0.5f, -0.5f, 0.f}, {0.0f, 1.0f, 0.0f}},
+                Vertex{{0.5f, 0.5f, 0.f}, {0.0f, 0.0f, 1.0f}}, Vertex{{-0.5f, 0.5f, 0.f}, {1.0f, 1.0f, 1.0f}}
+        };
+		const std::vector<uint32_t> INDICES{0, 1, 2, 2, 3, 0};
 
-	void PickPhysicalDevice();
-
-	void CreateLogicalDevice();
-
-	void CreateSurface();
-
-	void CreateSwapChain();
-
-	void CreateImageViews();
-
-	void CreateGraphicsPipeline();
-
-	void CreateRenderPass();
-
-	void CreateFramebuffers();
-
-	void CreateCommandPool();
-
-	void CreateCommandBuffers();
-
-	void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-
-	void CreateSyncObjects();
-
-	void RecreateSwapChain();
-
-	void CleanupSwapChain();
-
-	void CreateVertexBuffer();
-
-	void CreateIndexBuffer();
-
-	void CreateBuffer(
-	        VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer,
-	        VkDeviceMemory &bufferMemory
-	);
-
-	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-
-	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
-
-	[[nodiscard]]
-	VkShaderModule CreateShaderModule(std::vector<char> &&code);
-
-	[[nodiscard]]
-	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
-
-	[[nodiscard]]
-	SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
-
-	[[nodiscard]]
-	bool IsDeviceSuitable(VkPhysicalDevice device);
-
-	[[nodiscard]]
-	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
-
-	// Static
-	static void FramebufferResizeCallback(GLFWwindow *pWindow, int width, int height);
-
-	[[nodiscard]]
-	static std::vector<char> ReadFile(std::string_view fileName);
-
-	[[nodiscard]]
-	static bool CheckValidationLayerSupport();
-
-	[[nodiscard]]
-	static VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats);
-
-	[[nodiscard]]
-	static VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes);
-
-	static void PrintAvailableInstanceExtensions();
-
-	[[nodiscard]]
-	static std::vector<const char *> GetRequiredExtensions();
-
-	[[nodiscard]]
-	static VkResult CreateDebugUtilsMessengerEXT(
-	        VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
-	        const VkAllocationCallbacks *pAllocator, VkDebugUtilsMessengerEXT *pDebugMessenger
-	);
-
-	static void DestroyDebugUtilsMessengerEXT(
-	        VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks *pAllocator
-	);
-
-	static void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo);
-
-	[[nodiscard]]
-	static bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
-
-#ifdef NDEBUG
-	static constexpr bool ENABLE_VALIDATION_LAYERS{false};
-#else
-	static constexpr bool ENABLE_VALIDATION_LAYERS{true};
-#endif
-
-	static constexpr int                         WINDOW_WIDTH{800}, WINDOW_HEIGHT{600};
-	static constexpr std::string_view            WINDOW_TITLE{"Vulkan"};
-	static constexpr std::array<const char *, 1> VALIDATION_LAYERS{"VK_LAYER_KHRONOS_validation"};
-	static constexpr std::array<const char *, 0> INSTANCE_EXTENSIONS{};
-	static constexpr std::array<const char *, 6> DEVICE_EXTENSIONS{
-	        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-	        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-	        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-	        VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
-	        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-	        VK_KHR_SPIRV_1_4_EXTENSION_NAME
+		vk::Window                                      m_Window{};
+		vk::Instance                                    m_Instance{};
+		vk::Surface                                     m_Surface{};
+		vk::Device                                      m_Device{};
+		std::vector<Model>                              m_Models{};
+		VkPhysicalDevice                                m_PhysicalDevice{};
+		std::vector<VkFramebuffer>                      m_SwapChainFramebuffers{};
+		VkPhysicalDeviceRayTracingPipelinePropertiesKHR m_RtProperties{
+		        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR
+		};
 	};
-	static constexpr int                   MAX_FRAMES_IN_FLIGHT{2};
-	static constexpr std::array<Vertex, 4> VERTICES{
-	        Vertex{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}}, Vertex{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-	        Vertex{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}, Vertex{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
-	};
-	static constexpr std::array<uint16_t, 6> INDICES{0, 1, 2, 2, 3, 0};
-
-	VkInstance                 m_Instance{};
-	VkDebugUtilsMessengerEXT   m_DebugMessenger{};
-	GLFWwindow                *m_pWindow{};
-	VkPhysicalDevice           m_PhysicalDevice{VK_NULL_HANDLE};
-	VkDevice                   m_Device{};
-	VkSurfaceKHR               m_Surface{};
-	VkQueue                    m_GraphicsQueue{};
-	VkQueue                    m_PresentQueue{};
-	VkSwapchainKHR             m_SwapChain{};
-	std::vector<VkImage>       m_SwapChainImages{};
-	VkFormat                   m_SwapChainImageFormat{};
-	VkExtent2D                 m_SwapChainExtent{};
-	std::vector<VkImageView>   m_SwapChainImageViews{};
-	VkRenderPass               m_RenderPass{};
-	VkPipelineLayout           m_PipelineLayout{};
-	VkPipeline                 m_GraphicsPipeline{};
-	std::vector<VkFramebuffer> m_SwapChainFramebuffers{};
-	VkCommandPool              m_CommandPool{};
-	uint32_t                   m_CurrentFrame{0};
-	bool                       m_FramebufferResized{false};
-	VkBuffer                   m_VertexBuffer{};
-	VkDeviceMemory             m_VertexBufferMemory{};
-	VkBuffer                   m_IndexBuffer{};
-	VkDeviceMemory             m_IndexBufferMemory{};
-
-	std::array<VkCommandBuffer, MAX_FRAMES_IN_FLIGHT> m_CommandBuffers{};
-	std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT>     m_ImageAvailableSemaphores{};
-	std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT>     m_RenderFinishedSemaphores{};
-	std::array<VkFence, MAX_FRAMES_IN_FLIGHT>         m_InFlightFences{};
-};
+}// namespace roing
 
 
 #endif//PORTAL2RAYTRACED_APPLICATION_H
