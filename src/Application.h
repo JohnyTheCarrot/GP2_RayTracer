@@ -23,7 +23,10 @@ namespace roing {
 
 	class Application final {
 	public:
-		Application() {
+		Application() = default;
+
+		~Application() {
+			glfwTerminate();
 		}
 
 		void Run();
@@ -38,24 +41,9 @@ namespace roing {
 
 		void DrawFrame();
 
-		void Cleanup();
-
 		void InitRayTracing();
 
-		// Helper
-		void PickPhysicalDevice();
-
 		void ObjectToVkGeomtry(const Model &model);
-
-		[[nodiscard]]
-		VkShaderModule CreateShaderModule(std::vector<char> &&code);
-
-		[[nodiscard]]
-		bool IsDeviceSuitable(VkPhysicalDevice device);
-
-		// Static
-		[[nodiscard]]
-		static bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 
 		static constexpr int              WINDOW_WIDTH{800}, WINDOW_HEIGHT{600};
 		static constexpr std::string_view WINDOW_TITLE{"Vulkan"};

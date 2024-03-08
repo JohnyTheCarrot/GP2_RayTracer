@@ -1,6 +1,7 @@
 #ifndef PORTAL2RAYTRACED_INSTANCE_H
 #define PORTAL2RAYTRACED_INSTANCE_H
 
+#include "Surface.h"
 #include <array>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -18,12 +19,38 @@ namespace roing::vk {
 
 		~Instance() noexcept;
 
+		Instance(const Instance &)            = delete;
+		Instance &operator=(const Instance &) = delete;
+
+		Instance(Instance &&other) noexcept
+		    : m_Instance{other.m_Instance}
+#ifdef ENABLE_VALIDATION_LAYERS
+		    , m_DebugMessenger{other.m_DebugMessenger}
+#endif
+		{
+			other.m_Instance = nullptr;
+		}
+
+		Instance &operator=(Instance &&other) noexcept {
+			m_Instance = other.m_Instance;
+#ifdef ENABLE_VALIDATION_LAYERS
+			m_DebugMessenger = other.m_DebugMessenger;
+#endif
+
+			other.m_Instance = nullptr;
+
+			return *this;
+		}
+
 		[[nodiscard]]
 		VkInstance Get() const noexcept {
 			return m_Instance;
 		}
 
 		void Init();
+
+		[[nodiscard]]
+		VkPhysicalDevice PickPhysicalDevice(const Surface &surface) const;
 
 #ifdef ENABLE_VALIDATION_LAYERS
 		static constexpr bool VALIDATION_LAYERS_ENABLED{true};
@@ -32,6 +59,12 @@ namespace roing::vk {
 #endif
 
 	private:
+		[[nodiscard]]
+		static bool IsDeviceSuitable(VkPhysicalDevice device, const Surface &surface) noexcept;
+
+		[[nodiscard]]
+		static bool CheckDeviceExtensionSupport(VkPhysicalDevice device) noexcept;
+
 		static VKAPI_ATTR VkBool32 DebugCallback(
 		        VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,
 		        const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData
