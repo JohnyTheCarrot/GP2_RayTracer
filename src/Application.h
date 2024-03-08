@@ -57,19 +57,20 @@ namespace roing {
 		[[nodiscard]]
 		static bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 
-		static constexpr int                         WINDOW_WIDTH{800}, WINDOW_HEIGHT{600};
-		static constexpr std::string_view            WINDOW_TITLE{"Vulkan"};
-		static constexpr std::array<const char *, 0> INSTANCE_EXTENSIONS{};
-		const std::vector<Vertex>                    VERTICES{
+		static constexpr int              WINDOW_WIDTH{800}, WINDOW_HEIGHT{600};
+		static constexpr std::string_view WINDOW_TITLE{"Vulkan"};
+		const std::vector<Vertex>         VERTICES{
                 Vertex{{-0.5f, -0.5f, 0.f}, {1.0f, 0.0f, 0.0f}}, Vertex{{0.5f, -0.5f, 0.f}, {0.0f, 1.0f, 0.0f}},
                 Vertex{{0.5f, 0.5f, 0.f}, {0.0f, 0.0f, 1.0f}}, Vertex{{-0.5f, 0.5f, 0.f}, {1.0f, 1.0f, 1.0f}}
         };
 		const std::vector<uint32_t> INDICES{0, 1, 2, 2, 3, 0};
 
-		vk::Window                                      m_Window{};
-		vk::Instance                                    m_Instance{};
-		vk::Surface                                     m_Surface{};
-		vk::Device                                      m_Device{};
+		vk::Window    m_Window{};
+		vk::Instance  m_Instance{};
+		vk::Surface   m_Surface{};
+		vk::Device    m_Device{};
+		vk::Swapchain m_Swapchain{};
+
 		std::vector<Model>                              m_Models{};
 		VkPhysicalDevice                                m_PhysicalDevice{};
 		std::vector<VkFramebuffer>                      m_SwapChainFramebuffers{};

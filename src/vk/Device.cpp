@@ -137,13 +137,15 @@ namespace roing::vk {
 		}
 	}
 
-	Swapchain &Device::CreateSwapchain(const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice) {
-		m_SwapChain = Swapchain{this, window, surface, physicalDevice};
-
-		return m_SwapChain;
+	void Device::CreateSwapchain(
+	        const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice, Swapchain *pSwapchain
+	) {
+		*pSwapchain = Swapchain{this, window, surface, physicalDevice};
 	}
 
-	void Device::RecreateSwapchain(const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice) {
+	void Device::RecreateSwapchain(
+	        const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice, Swapchain *pSwapchain
+	) {
 		int width, height;
 		glfwGetFramebufferSize(window.Get(), &width, &height);
 		while (width == 0 || height == 0) {
@@ -153,7 +155,7 @@ namespace roing::vk {
 
 		vkDeviceWaitIdle(m_Device);
 
-		m_SwapChain = Swapchain{this, window, surface, physicalDevice};
+		*pSwapchain = Swapchain{this, window, surface, physicalDevice};
 	}
 
 	void Device::CreateBuffer(

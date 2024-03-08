@@ -33,16 +33,16 @@ namespace roing {
 
 		m_Device = vk::Device{m_Surface, m_PhysicalDevice};
 
-		vk::Swapchain &swapchain{m_Device.CreateSwapchain(m_Window, m_Surface, m_PhysicalDevice)};
+		m_Device.CreateSwapchain(m_Window, m_Surface, m_PhysicalDevice, &m_Swapchain);
 
-		swapchain.CreateImageViews();
-		swapchain.CreateRenderPass();
-		swapchain.CreateGraphicsPipeline();
-		swapchain.CreateFramebuffers();
+		m_Swapchain.CreateImageViews();
+		m_Swapchain.CreateRenderPass();
+		m_Swapchain.CreateGraphicsPipeline();
+		m_Swapchain.CreateFramebuffers();
 		m_Device.CreateCommandPool(m_Surface, m_PhysicalDevice);
 		m_Models.emplace_back(m_PhysicalDevice, m_Device, VERTICES, INDICES);
-		swapchain.CreateCommandBuffers();
-		swapchain.CreateSyncObjects();
+		m_Swapchain.CreateCommandBuffers();
+		m_Swapchain.CreateSyncObjects();
 
 		InitRayTracing();
 	}
@@ -50,14 +50,15 @@ namespace roing {
 	void Application::MainLoop() {
 		while (!glfwWindowShouldClose(m_Window.Get())) {
 			glfwPollEvents();
-			if (m_Device.GetSwapchain().DrawFrame(m_Window, m_Models))
-				m_Device.RecreateSwapchain(m_Window, m_Surface, m_PhysicalDevice);
+			DrawFrame();
 		}
 
 		vkDeviceWaitIdle(m_Device.GetHandle());
 	}
 
 	void Application::DrawFrame() {
+		if (m_Swapchain.DrawFrame(m_Window, m_Models))
+			m_Device.RecreateSwapchain(m_Window, m_Surface, m_PhysicalDevice, &m_Swapchain);
 	}
 
 	void Application::Cleanup() {

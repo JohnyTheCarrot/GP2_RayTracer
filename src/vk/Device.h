@@ -11,7 +11,7 @@ namespace roing::vk {
 	public:
 		Device() = default;
 
-		explicit Device(const Surface &surface, VkPhysicalDevice physicalDevice);
+		Device(const Surface &surface, VkPhysicalDevice physicalDevice);
 
 		~Device() noexcept;
 
@@ -22,8 +22,7 @@ namespace roing::vk {
 		    : m_Device{other.m_Device}
 		    , m_CommandPool{other.m_CommandPool}
 		    , m_GraphicsQueue{other.m_GraphicsQueue}
-		    , m_PresentQueue{other.m_PresentQueue}
-		    , m_SwapChain{std::move(other.m_SwapChain)} {
+		    , m_PresentQueue{other.m_PresentQueue} {
 			other.m_Device = nullptr;
 		};
 
@@ -33,14 +32,8 @@ namespace roing::vk {
 			m_CommandPool   = other.m_CommandPool;
 			m_GraphicsQueue = other.m_GraphicsQueue;
 			m_PresentQueue  = other.m_PresentQueue;
-			m_SwapChain     = std::move(other.m_SwapChain);
 
 			return *this;
-		}
-
-		[[nodiscard]]
-		Swapchain &GetSwapchain() noexcept {
-			return m_SwapChain;
 		}
 
 		[[nodiscard]]
@@ -48,9 +41,13 @@ namespace roing::vk {
 			return m_Device;
 		}
 
-		Swapchain &CreateSwapchain(const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice);
+		void CreateSwapchain(
+		        const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice, Swapchain *pSwapchain
+		);
 
-		void RecreateSwapchain(const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice);
+		void RecreateSwapchain(
+		        const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice, Swapchain *pSwapchain
+		);
 
 		void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
@@ -90,7 +87,6 @@ namespace roing::vk {
 		VkCommandPool m_CommandPool{};
 		VkQueue       m_GraphicsQueue{};
 		VkQueue       m_PresentQueue{};
-		Swapchain     m_SwapChain{};
 	};
 }// namespace roing::vk
 
