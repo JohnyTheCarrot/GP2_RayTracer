@@ -21,8 +21,6 @@ namespace roing {
 
 	class Model final {
 	public:
-		Model() = default;
-
 		Model(VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<Vertex> &vertices,
 		      const std::vector<uint32_t> &indices);
 
@@ -55,14 +53,14 @@ namespace roing {
 		BlasInput ObjectToVkGeometry() const noexcept;
 
 	private:
-		void
+		static vk::Buffer
 		CreateVertexBuffer(VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<Vertex> &vertices);
-		void
+		static vk::Buffer
 		CreateIndexBuffer(VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<uint32_t> &indices);
 
 		VkDevice   m_Device{};
-		vk::Buffer m_VertexBuffer{};
-		vk::Buffer m_IndexBuffer{};
+		vk::Buffer m_VertexBuffer;
+		vk::Buffer m_IndexBuffer;
 		uint32_t   m_VertexCount{};
 		uint32_t   m_IndexCount{};
 	};

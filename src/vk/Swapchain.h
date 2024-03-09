@@ -2,6 +2,7 @@
 #define PORTAL2RAYTRACED_SWAPCHAIN_H
 
 #include "../Model.h"
+#include "Texture.h"
 #include "Window.h"
 #include <vector>
 #include <vulkan/vulkan.hpp>
@@ -12,6 +13,13 @@ namespace roing::vk {
 
 	class Surface;
 
+	struct PushConstantRay final {
+		glm::vec4 clearColor;
+		glm::vec3 lightPosition;
+		float     lightIntensity;
+		int       lightType;
+	};
+
 	class Swapchain final {
 	public:
 		Swapchain() = default;
@@ -19,7 +27,8 @@ namespace roing::vk {
 		~Swapchain();
 
 		void
-		Create(Device *pParentDevice, const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice);
+		Create(Device *pParentDevice, const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice,
+		       VkDescriptorSetLayout descriptorSetLayout);
 
 		void
 		Recreate(Device *pParentDevice, const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice);
@@ -47,24 +56,48 @@ namespace roing::vk {
 
 		void CreateRenderPass();
 
-		void CreateGraphicsPipeline();
+		void CreateGraphicsPipeline(VkDescriptorSetLayout descriptorSetLayout);
 
 		// Return value: whether to recreate the swapchain
 		[[nodiscard]]
-		bool DrawFrame(roing::vk::Window &window, const std::vector<Model> &models);
+		bool DrawFrame(const Device &device, roing::vk::Window &window, const std::vector<Model> &models);
 
 		[[nodiscard]]
 		VkImageView GetCurrentImageView() const noexcept;
+
+		[[nodiscard]]
+		VkImageView GetOutputImageView() const noexcept;
+
+		[[nodiscard]]
+		Texture &GetOutputTexture() noexcept;
+
+		void CreateRtShaderBindingTable(VkPhysicalDevice physicalDevice);
+
+		// TODO: move to device
+		[[nodiscard]]
+		VkShaderModule CreateShaderModule(std::vector<char> &&code);
+
+		[[nodiscard]]
+		VkExtent2D GetExtent() const noexcept;
+
+		[[nodiscard]]
+		VkFormat GetFormat() const noexcept;
+
+		[[nodiscard]]
+		VkFramebuffer GetFramebuffer() const noexcept;
+
+		[[nodiscard]]
+		VkCommandBuffer GetCommandBuffer() const noexcept;
 
 	private:
 		void Init(Device *pParentDevice, const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice);
 
 		void CleanupOnlySwapchain();
 
-		[[nodiscard]]
-		VkShaderModule CreateShaderModule(std::vector<char> &&code);
-
-		void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, const std::vector<Model> &models);
+		void RecordCommandBuffer(
+		        VkCommandBuffer commandBuffer, uint32_t imageIndex, const std::vector<Model> &models,
+		        const Window &window, const Device &device
+		);
 
 		[[nodiscard]]
 		static VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats);
@@ -75,6 +108,27 @@ namespace roing::vk {
 		[[nodiscard]]
 		static VkExtent2D ChooseSwapExtent(const Window &window, const VkSurfaceCapabilitiesKHR &capabilities);
 
+		[[nodiscard]]
+		static constexpr uint32_t AlignUp(uint32_t num, uint32_t alignment) {
+			return (num + (alignment - 1)) & ~(alignment - 1);
+		}
+
+		[[nodiscard]]
+		static VkAccessFlags AccessFlagsForImageLayout(VkImageLayout layout);
+
+		[[nodiscard]]
+		static VkPipelineStageFlags PipelineStageForLayout(VkImageLayout layout);
+
+		static void CmdBarrierImageLayout(
+		        VkCommandBuffer commandBuffer, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout,
+		        const VkImageSubresourceRange &subresourceRange
+		);
+
+		static void CmdBarrierImageLayout(
+		        VkCommandBuffer commandBuffer, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout,
+		        VkImageAspectFlags imageAspectFlags
+		);
+
 		uint32_t                   m_CurrentFrame{0};
 		Device                    *m_pParentDevice{};
 		VkSwapchainKHR             m_SwapChain{};
@@ -84,8 +138,23 @@ namespace roing::vk {
 		std::vector<VkImageView>   m_SwapChainImageViews{};
 		std::vector<VkFramebuffer> m_SwapChainFramebuffers{};
 		VkRenderPass               m_RenderPass{};
-		VkPipeline                 m_GraphicsPipeline{};
-		VkPipelineLayout           m_PipelineLayout{};
+
+		std::vector<VkRayTracingShaderGroupCreateInfoKHR> m_ShaderGroups{};
+		VkPipeline                                        m_RayTracingPipeline{};
+		VkPipelineLayout                                  m_PipelineLayout{};
+		PushConstantRay                                   m_PushConstantRay{};
+		Buffer                                            m_SBTBuffer{};
+		VkStridedDeviceAddressRegionKHR                   m_RgenRegion{};
+		VkStridedDeviceAddressRegionKHR                   m_MissRegion{};
+		VkStridedDeviceAddressRegionKHR                   m_HitRegion{};
+		VkStridedDeviceAddressRegionKHR                   m_CallRegion{};
+		VkPhysicalDeviceRayTracingPipelinePropertiesKHR   m_RtProperties{
+                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR
+        };
+
+		Texture     m_OutImage;
+		VkImageView m_OutImageView{};
+
 
 		static constexpr int MAX_FRAMES_IN_FLIGHT{2};
 

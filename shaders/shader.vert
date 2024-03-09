@@ -1,11 +1,12 @@
 #version 450
 
-layout (location = 0) in vec3 inPosition;
-layout (location = 1) in vec3 inColor;
+layout (location = 0) out vec2 outUV;
 
-layout (location = 0) out vec3 fragColor;
+out gl_PerVertex {
+    vec4 gl_Position;
+};
 
 void main() {
-    gl_Position = vec4(inPosition.xy, 0.0, 1.0);
-    fragColor = inColor;
+    outUV = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
+    gl_Position = vec4(outUV * 2.0f - 1.0f, 1.0f, 1.0f);
 }

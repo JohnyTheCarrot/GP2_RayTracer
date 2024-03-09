@@ -3,8 +3,10 @@
 #include "PhysicalDeviceUtils.h"
 #include "QueueFamilyIndices.h"
 #include "Window.h"
+#include "src/tiny_obj_loader.h"
 #include "src/utils/ToTransformMatrixKHR.h"
 #include "src/utils/debug.h"
+#include "src/utils/read_file.h"
 #include <set>
 #include <vulkan/vk_enum_string_helper.h>
 
@@ -14,6 +16,10 @@ namespace roing::vk {
 			return;
 
 		DEBUG("Destroying device...");
+		vkDestroyDescriptorPool(m_Device, m_DescPool, nullptr);
+		vkDestroyDescriptorSetLayout(m_Device, m_DescSetLayout, nullptr);
+		m_Models.clear();
+		m_ModelInstances.clear();
 		m_Swapchain.Cleanup();
 		m_Blas.clear();
 		m_Tlas = std::nullopt;
@@ -25,12 +31,17 @@ namespace roing::vk {
 		DEBUG("Device destroyed");
 	}
 
-	Device::Device(const Surface &surface, VkPhysicalDevice physicalDevice, const Window &window) {
-		QueueFamilyIndices indices{physical_device::FindQueueFamilies(surface, physicalDevice)};
+	Device::Device(
+	        const Surface &surface, VkPhysicalDevice physicalDevice, const Window &window,
+	        const std::vector<ModelLoadData> &models
+	) {
+		m_QueueFamilyIndices = physical_device::FindQueueFamilies(surface, physicalDevice);
 
 		std::vector<VkDeviceQueueCreateInfo> queueCreateInfos{};
 		// todo: use unordered_set?
-		std::set<uint32_t> uniqueQueueFamilies{indices.graphicsFamily.value(), indices.presentFamily.value()};
+		std::set<uint32_t> uniqueQueueFamilies{
+		        m_QueueFamilyIndices.graphicsFamily.value(), m_QueueFamilyIndices.presentFamily.value()
+		};
 
 		float queuePriority = 1.f;
 		for (uint32_t queueFamily: uniqueQueueFamilies) {
@@ -85,11 +96,30 @@ namespace roing::vk {
 			throw std::runtime_error{std::string{"Failed to create logical device: "} + string_VkResult(result)};
 		}
 
-		vkGetDeviceQueue(m_Device, indices.graphicsFamily.value(), 0, &m_GraphicsQueue);
-		vkGetDeviceQueue(m_Device, indices.presentFamily.value(), 0, &m_PresentQueue);
+		vkGetDeviceQueue(m_Device, m_QueueFamilyIndices.graphicsFamily.value(), 0, &m_GraphicsQueue);
+		vkGetDeviceQueue(m_Device, m_QueueFamilyIndices.presentFamily.value(), 0, &m_PresentQueue);
 
 		CreateCommandPool(surface, physicalDevice);
-		m_Swapchain.Create(this, window, surface, physicalDevice);
+
+		for (const auto &modelLoadData: models) {
+			const Model &model{m_Models.emplace_back(LoadModel(physicalDevice, modelLoadData.fileName))};
+			m_ModelInstances.emplace_back(&model, modelLoadData.transform, static_cast<uint32_t>(m_Models.size() - 1));
+		}
+		SetUpRaytracing(physicalDevice, m_Models, m_ModelInstances);
+
+		CreateRtDescriptorSet();
+
+		m_Swapchain.Create(this, window, surface, physicalDevice, m_DescSetLayout);
+
+		CreatePostDescriptorSet();
+		CreatePostRenderPass();
+		CreatePostPipeline();
+		UpdatePostDescriptorSet();
+		m_Swapchain.CreateFramebuffers();
+
+		FillRtDescriptorSet();
+
+		m_Swapchain.CreateRtShaderBindingTable(physicalDevice);
 	}
 
 	void Device::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
@@ -542,7 +572,7 @@ namespace roing::vk {
 	AccelerationStructure Device::CreateAccelerationStructure(
 	        VkPhysicalDevice physicalDevice, VkAccelerationStructureCreateInfoKHR &createInfo
 	) {
-		AccelerationStructure accelerationStructure;
+		AccelerationStructure accelerationStructure{};
 		accelerationStructure.deviceHandle = m_Device;
 
 		accelerationStructure.buffer = CreateBuffer(
@@ -684,5 +714,445 @@ namespace roing::vk {
 		const VkAccelerationStructureBuildRangeInfoKHR *pBuildOffsetInfo{&buildOffsetInfo};
 
 		vkCmdBuildAccelerationStructuresKHR(m_Device, cmdBuf, 1, &buildGeometryInfo, &pBuildOffsetInfo);
+	}
+
+	void Device::CreateRtDescriptorSet() {
+		m_DescriptorSetLayoutBindings.emplace_back(
+		        static_cast<int>(RtxBindings::eTlas), VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1,
+		        VK_SHADER_STAGE_RAYGEN_BIT_KHR
+		);
+		m_DescriptorSetLayoutBindings.emplace_back(
+		        static_cast<int>(RtxBindings::eOutImage), VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1,
+		        VK_SHADER_STAGE_RAYGEN_BIT_KHR
+		);
+
+		m_DescPool      = CreatePool();
+		m_DescSetLayout = CreateDescriptorSetLayout(0, m_DescriptorBindingFlags, m_DescriptorSetLayoutBindings);
+
+		VkDescriptorSetAllocateInfo allocateInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+		allocateInfo.descriptorPool     = m_DescPool;
+		allocateInfo.descriptorSetCount = 1;
+		allocateInfo.pSetLayouts        = &m_DescSetLayout;
+		vkAllocateDescriptorSets(m_Device, &allocateInfo, &m_DescSet);
+	}
+
+	void Device::UpdateRtDescriptorSet() {
+		VkDescriptorImageInfo imageInfo{{}, m_Swapchain.GetOutputImageView(), VK_IMAGE_LAYOUT_GENERAL};
+		VkWriteDescriptorSet  writeDescriptorSet{MakeWrite(
+                m_DescriptorSetLayoutBindings, m_DescSet, static_cast<uint32_t>(RtxBindings::eOutImage), &imageInfo, 0
+        )};
+		vkUpdateDescriptorSets(m_Device, 1, &writeDescriptorSet, 0, nullptr);
+	}
+
+	VkDescriptorPool Device::CreatePool(uint32_t maxSets, VkDescriptorPoolCreateFlags flags) {
+		std::vector<VkDescriptorPoolSize> poolSizes{};
+		AddRequiredPoolSizes(poolSizes, maxSets);
+
+		VkDescriptorPool           descriptorPool;
+		VkDescriptorPoolCreateInfo descPoolInfo{};
+		descPoolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		descPoolInfo.pNext         = nullptr;
+		descPoolInfo.maxSets       = maxSets;
+		descPoolInfo.poolSizeCount = poolSizes.size();
+		descPoolInfo.pPoolSizes    = poolSizes.data();
+		descPoolInfo.flags         = flags;
+
+		VkResult result{vkCreateDescriptorPool(m_Device, &descPoolInfo, nullptr, &descriptorPool)};
+		assert(result == VK_SUCCESS);
+		return descriptorPool;
+	}
+
+	void Device::AddRequiredPoolSizes(std::vector<VkDescriptorPoolSize> &poolSizes, uint32_t numSets) {
+		for (const auto &binding: m_DescriptorSetLayoutBindings) {
+			if (binding.descriptorCount == 0)
+				continue;
+
+			bool found{false};
+			for (VkDescriptorPoolSize &poolSize: poolSizes) {
+				if (poolSize.type == binding.descriptorType) {
+					poolSize.descriptorCount += binding.descriptorCount * numSets;
+					found = true;
+					break;
+				}
+			};
+
+			if (found)
+				continue;
+
+			VkDescriptorPoolSize poolSize{};
+			poolSize.type            = binding.descriptorType;
+			poolSize.descriptorCount = binding.descriptorCount * numSets;
+			poolSizes.emplace_back(poolSize);
+		}
+	}
+
+	VkDescriptorSetLayout Device::CreateDescriptorSetLayout(
+	        VkDescriptorSetLayoutCreateFlags flags, std::vector<VkDescriptorBindingFlags> &bindingFlags,
+	        std::vector<VkDescriptorSetLayoutBinding> &bindings
+	) {
+		VkDescriptorSetLayoutBindingFlagsCreateInfo bindingsInfo{
+		        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO
+		};
+
+		if (bindingFlags.empty() && bindingFlags.size() < bindings.size()) {
+			bindingFlags.resize(bindings.size(), 0);
+		}
+
+		bindingsInfo.bindingCount  = static_cast<uint32_t>(bindings.size());
+		bindingsInfo.pBindingFlags = bindingFlags.data();
+
+		VkDescriptorSetLayoutCreateInfo createInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+		createInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+		createInfo.pBindings    = bindings.data();
+		createInfo.flags        = flags;
+		createInfo.pNext        = bindingFlags.empty() ? nullptr : &bindingsInfo;
+
+		VkDescriptorSetLayout descriptorSetLayout;
+		vkCreateDescriptorSetLayout(m_Device, &createInfo, nullptr, &descriptorSetLayout);
+		return descriptorSetLayout;
+	}
+
+	VkWriteDescriptorSet Device::MakeWrite(
+	        const std::vector<VkDescriptorSetLayoutBinding> &bindings, VkDescriptorSet dstSet, uint32_t dstBinding,
+	        uint32_t arrayElement
+	) {
+		VkWriteDescriptorSet writeSet{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+		writeSet.descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+
+		for (const auto &binding: bindings) {
+			if (binding.binding != dstBinding)
+				continue;
+
+			writeSet.descriptorCount = 1;
+			writeSet.descriptorType  = binding.descriptorType;
+			writeSet.dstBinding      = dstBinding;
+			writeSet.dstSet          = dstSet;
+			writeSet.dstArrayElement = arrayElement;
+			return writeSet;
+		}
+
+		throw std::runtime_error{"failed to make descriptor set"};
+	}
+
+	VkWriteDescriptorSet Device::MakeWrite(
+	        const std::vector<VkDescriptorSetLayoutBinding> &bindings, VkDescriptorSet dstSet, uint32_t dstBinding,
+	        const VkWriteDescriptorSetAccelerationStructureKHR *pAccelerationStructure, uint32_t arrayElement
+	) {
+		VkWriteDescriptorSet descriptorSet{MakeWrite(bindings, dstSet, dstBinding, arrayElement)};
+		descriptorSet.pNext = pAccelerationStructure;
+
+		return descriptorSet;
+	}
+
+	VkWriteDescriptorSet Device::MakeWrite(
+	        const std::vector<VkDescriptorSetLayoutBinding> &bindings, VkDescriptorSet dstSet, uint32_t dstBinding,
+	        const VkDescriptorImageInfo *pImageInfo, uint32_t arrayElement
+	) {
+		VkWriteDescriptorSet descriptorSet{MakeWrite(bindings, dstSet, dstBinding, arrayElement)};
+		descriptorSet.pImageInfo = pImageInfo;
+
+		return descriptorSet;
+	}
+
+	bool Device::DrawFrame(Window &window) {
+		return m_Swapchain.DrawFrame(*this, window, m_Models);
+	}
+
+	Model Device::LoadModel(VkPhysicalDevice physicalDevice, const std::string &fileName) {
+		tinyobj::ObjReaderConfig readerConfig{};
+		readerConfig.mtl_search_path = "./";
+
+		tinyobj::ObjReader reader;
+
+		if (!reader.ParseFromFile("resources/" + fileName, readerConfig)) {
+			if (!reader.Error().empty()) {
+				throw std::runtime_error(reader.Error());
+			}
+			throw std::runtime_error("failed to parse obj file");
+		}
+
+		if (!reader.Warning().empty()) {
+			std::cerr << "TinyObjReader: " << reader.Warning();
+		}
+
+		const auto &attrib{reader.GetAttrib()};
+		const auto &shapes{reader.GetShapes()};
+		const auto &materials{reader.GetMaterials()};
+
+		std::vector<Vertex>   modelVertices(attrib.vertices.size() * 3);
+		std::vector<uint32_t> modelIndices{};
+
+		for (const auto &shape: shapes) {
+			size_t indexOffset{0};
+
+			for (const auto &faceVertexCount: shape.mesh.num_face_vertices) {
+				for (size_t vertex{0}; vertex < faceVertexCount; ++vertex) {
+					tinyobj::index_t idx{shape.mesh.indices[indexOffset + vertex]};
+					tinyobj::real_t  vx{attrib.vertices[3 * idx.vertex_index + 0]};
+					tinyobj::real_t  vy{attrib.vertices[3 * idx.vertex_index + 1]};
+					tinyobj::real_t  vz{attrib.vertices[3 * idx.vertex_index + 2]};
+
+					// negative = no data
+					if (idx.normal_index >= 0) {
+						tinyobj::real_t nx{attrib.normals[3 * idx.normal_index + 0]};
+						tinyobj::real_t ny{attrib.normals[3 * idx.normal_index + 1]};
+						tinyobj::real_t nz{attrib.normals[3 * idx.normal_index + 2]};
+					}
+
+					// TODO: attrib.texcoords, tx and ty
+
+					modelVertices.emplace_back(glm::vec3{vx, vy, vz}, glm::vec3{1.f, 1.f, 1.f});
+					modelIndices.emplace_back(idx.vertex_index);
+				}
+				indexOffset += faceVertexCount;
+			}
+		}
+
+		return Model{physicalDevice, *this, modelVertices, modelIndices};
+	}
+
+	void Device::FillRtDescriptorSet() {
+		VkAccelerationStructureKHR                   tlas{GetTlas().accStructHandle};
+		VkWriteDescriptorSetAccelerationStructureKHR descASInfo{
+		        VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR
+		};
+		descASInfo.accelerationStructureCount = 1;
+		descASInfo.pAccelerationStructures    = &tlas;
+
+		// TODO: taking a bet here with the image view
+		VkDescriptorImageInfo imageInfo{{}, m_Swapchain.GetOutputImageView(), VK_IMAGE_LAYOUT_GENERAL};
+
+		std::vector<VkWriteDescriptorSet> writeDescriptorSets{};
+		writeDescriptorSets.emplace_back(MakeWrite(
+		        m_DescriptorSetLayoutBindings, m_DescSet, static_cast<uint32_t>(RtxBindings::eTlas), &descASInfo, 0
+		));
+		writeDescriptorSets.emplace_back(MakeWrite(
+		        m_DescriptorSetLayoutBindings, m_DescSet, static_cast<uint32_t>(RtxBindings::eOutImage), &imageInfo, 0
+		));
+		vkUpdateDescriptorSets(
+		        m_Device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr
+		);
+
+		// Camera matrices
+		m_DescriptorSetLayoutBindings.emplace_back(
+		        static_cast<uint32_t>(SceneBindings::eGlobals), VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
+		        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
+		);
+
+		// Obj descriptions
+		m_DescriptorSetLayoutBindings.emplace_back(
+		        static_cast<uint32_t>(SceneBindings::eObjDescs), VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1,
+		        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+		);
+
+		// TODO: Textures
+	}
+
+	void Device::CreatePostDescriptorSet() {
+		m_PostDescriptorSetLayoutBindings.emplace_back(
+		        0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT
+		);
+		m_PostDescriptorSetLayout =
+		        CreateDescriptorSetLayout(0, m_PostDescriptorSetLayoutBindingFlags, m_PostDescriptorSetLayoutBindings);
+		m_PostDescriptorPool = CreatePool();
+
+		VkDescriptorSetAllocateInfo allocateInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+		allocateInfo.descriptorPool     = m_PostDescriptorPool;
+		allocateInfo.descriptorSetCount = 1;
+		allocateInfo.pSetLayouts        = &m_PostDescriptorSetLayout;
+		vkAllocateDescriptorSets(m_Device, &allocateInfo, &m_PostDescriptorSet);
+	}
+
+	void Device::UpdatePostDescriptorSet() {
+		VkWriteDescriptorSet writeDescriptorSet{MakeWrite(
+		        m_PostDescriptorSetLayoutBindings, m_PostDescriptorSet, 0, &m_Swapchain.GetOutputTexture().descriptor, 0
+		)};
+		vkUpdateDescriptorSets(m_Device, 1, &writeDescriptorSet, 0, nullptr);
+	}
+
+	void Device::CreatePostPipeline() {
+		VkPushConstantRange pushConstantRange{VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(float)};
+
+		VkPipelineLayoutCreateInfo createInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+		createInfo.setLayoutCount         = 1;
+		createInfo.pSetLayouts            = &m_PostDescriptorSetLayout;
+		createInfo.pushConstantRangeCount = 1;
+		createInfo.pPushConstantRanges    = &pushConstantRange;
+		if (const VkResult result{vkCreatePipelineLayout(GetHandle(), &createInfo, nullptr, &m_PostPipelineLayout)};
+		    result != VK_SUCCESS) {
+			throw std::runtime_error{std::string{"Failed to create pipeline layout: "} + string_VkResult(result)};
+		}
+
+		auto vertShaderCode{utils::ReadFile("shaders/shader.vert.spv")};
+		auto fragShaderCode{utils::ReadFile("shaders/shader.frag.spv")};
+
+		VkShaderModule vertShaderModule{m_Swapchain.CreateShaderModule(std::move(vertShaderCode))};
+		VkShaderModule fragShaderModule{m_Swapchain.CreateShaderModule(std::move(fragShaderCode))};
+
+		VkPipelineShaderStageCreateInfo vertShaderStageCreateInfo{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+		vertShaderStageCreateInfo.stage  = VK_SHADER_STAGE_VERTEX_BIT;
+		vertShaderStageCreateInfo.module = vertShaderModule;
+		vertShaderStageCreateInfo.pName  = "main";
+
+		VkPipelineShaderStageCreateInfo fragShaderStageCreateInfo{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+		fragShaderStageCreateInfo.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+		fragShaderStageCreateInfo.module = fragShaderModule;
+		fragShaderStageCreateInfo.pName  = "main";
+
+		std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages{
+		        vertShaderStageCreateInfo, fragShaderStageCreateInfo
+		};
+
+		std::vector<VkDynamicState> dynamicStates{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+
+		VkPipelineDynamicStateCreateInfo dynamicStateInfo{};
+		dynamicStateInfo.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+		dynamicStateInfo.dynamicStateCount = dynamicStates.size();
+		dynamicStateInfo.pDynamicStates    = dynamicStates.data();
+
+		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+		vertexInputInfo.vertexBindingDescriptionCount   = 0;
+		vertexInputInfo.pVertexBindingDescriptions      = nullptr;
+		vertexInputInfo.vertexAttributeDescriptionCount = 0;
+		vertexInputInfo.pVertexAttributeDescriptions    = nullptr;
+
+		VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
+		inputAssemblyInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		inputAssemblyInfo.topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
+
+		VkViewport viewport{};
+		viewport.x        = 0.0f;
+		viewport.y        = 0.0f;
+		viewport.width    = static_cast<float>(m_Swapchain.GetExtent().width);
+		viewport.height   = static_cast<float>(m_Swapchain.GetExtent().height);
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+
+		VkRect2D scissor{};
+		scissor.offset = {0, 0};
+		scissor.extent = m_Swapchain.GetExtent();
+
+		VkPipelineViewportStateCreateInfo viewportStateInfo{};
+		viewportStateInfo.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+		viewportStateInfo.viewportCount = 1;
+		viewportStateInfo.scissorCount  = 1;
+
+		VkPipelineRasterizationStateCreateInfo rasterizerInfo{};
+		rasterizerInfo.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+		rasterizerInfo.depthClampEnable        = VK_FALSE;
+		rasterizerInfo.rasterizerDiscardEnable = VK_FALSE;
+		rasterizerInfo.polygonMode             = VK_POLYGON_MODE_FILL;
+		rasterizerInfo.lineWidth               = 1.0f;
+		rasterizerInfo.cullMode                = VK_CULL_MODE_NONE;
+		rasterizerInfo.frontFace               = VK_FRONT_FACE_CLOCKWISE;
+		rasterizerInfo.depthBiasEnable         = VK_FALSE;
+
+		VkPipelineMultisampleStateCreateInfo multisampleInfo{};
+		multisampleInfo.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+		multisampleInfo.sampleShadingEnable  = VK_FALSE;
+		multisampleInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+		VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+		colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+		                                      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+		colorBlendAttachment.blendEnable         = VK_TRUE;
+		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		colorBlendAttachment.colorBlendOp        = VK_BLEND_OP_ADD;
+		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+		colorBlendAttachment.alphaBlendOp        = VK_BLEND_OP_ADD;
+
+		VkPipelineColorBlendStateCreateInfo colorBlending{};
+		colorBlending.sType             = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+		colorBlending.logicOpEnable     = VK_FALSE;
+		colorBlending.logicOp           = VK_LOGIC_OP_COPY;
+		colorBlending.attachmentCount   = 1;
+		colorBlending.pAttachments      = &colorBlendAttachment;
+		colorBlending.blendConstants[0] = 0.0f;
+		colorBlending.blendConstants[1] = 0.0f;
+		colorBlending.blendConstants[2] = 0.0f;
+		colorBlending.blendConstants[3] = 0.0f;
+
+		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+
+		VkGraphicsPipelineCreateInfo pipelineCreateInfo{};
+		pipelineCreateInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		pipelineCreateInfo.stageCount          = shaderStages.size();
+		pipelineCreateInfo.pStages             = shaderStages.data();
+		pipelineCreateInfo.pVertexInputState   = &vertexInputInfo;
+		pipelineCreateInfo.pInputAssemblyState = &inputAssemblyInfo;
+		pipelineCreateInfo.pViewportState      = &viewportStateInfo;
+		pipelineCreateInfo.pRasterizationState = &rasterizerInfo;
+		pipelineCreateInfo.pMultisampleState   = &multisampleInfo;
+		pipelineCreateInfo.pDepthStencilState  = nullptr;
+		pipelineCreateInfo.pColorBlendState    = &colorBlending;
+		pipelineCreateInfo.pDynamicState       = &dynamicStateInfo;
+		pipelineCreateInfo.layout              = m_PostPipelineLayout;
+		pipelineCreateInfo.renderPass          = m_RenderPass;
+		pipelineCreateInfo.subpass             = 0;
+
+		// Creating new pipeline from existing one!
+		// https://vulkan-tutorial.com/en/Drawing_a_triangle/Graphics_pipeline_basics/Conclusion
+		pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+		pipelineCreateInfo.basePipelineIndex  = -1;
+
+		if (const VkResult result{vkCreateGraphicsPipelines(
+		            GetHandle(), VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &m_PostPipeline
+		    )};
+		    result != VK_SUCCESS) {
+			throw std::runtime_error{std::string{"Failed to create graphics pipeline: "} + string_VkResult(result)};
+		}
+
+		vkDestroyShaderModule(GetHandle(), vertShaderModule, nullptr);
+		vkDestroyShaderModule(GetHandle(), fragShaderModule, nullptr);
+	}
+
+	void Device::CreatePostRenderPass() {
+		VkAttachmentDescription colorAttachment{};
+		colorAttachment.format         = m_Swapchain.GetFormat();
+		colorAttachment.samples        = VK_SAMPLE_COUNT_1_BIT;
+		colorAttachment.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		colorAttachment.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
+		colorAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		colorAttachment.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+		colorAttachment.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+		VkAttachmentReference colorAttachmentRef{};
+		colorAttachmentRef.attachment = 0;
+		colorAttachmentRef.layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+		VkSubpassDescription subpassDescription{};
+		subpassDescription.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		subpassDescription.colorAttachmentCount = 1;
+		subpassDescription.pColorAttachments    = &colorAttachmentRef;
+
+		VkRenderPassCreateInfo renderPassCreateInfo{};
+		renderPassCreateInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		renderPassCreateInfo.attachmentCount = 1;
+		renderPassCreateInfo.pAttachments    = &colorAttachment;
+		renderPassCreateInfo.subpassCount    = 1;
+		renderPassCreateInfo.pSubpasses      = &subpassDescription;
+
+		VkSubpassDependency dependency{};
+		dependency.srcSubpass    = VK_SUBPASS_EXTERNAL;
+		dependency.dstSubpass    = 0;
+		dependency.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		dependency.srcAccessMask = 0;
+		dependency.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+		renderPassCreateInfo.dependencyCount = 1;
+		renderPassCreateInfo.pDependencies   = &dependency;
+
+		if (const VkResult result{vkCreateRenderPass(GetHandle(), &renderPassCreateInfo, nullptr, &m_RenderPass)};
+		    result != VK_SUCCESS) {
+			throw std::runtime_error{std::string{"Failed to create render pass: "} + string_VkResult(result)};
+		}
 	}
 }// namespace roing::vk

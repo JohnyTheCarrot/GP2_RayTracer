@@ -5,6 +5,7 @@
 #include "../ModelInstance.h"
 #include "AccelerationStructure.h"
 #include "Buffer.h"
+#include "QueueFamilyIndices.h"
 #include "Surface.h"
 #include "Swapchain.h"
 #include <array>
@@ -12,6 +13,15 @@
 #include <vulkan/vulkan.h>
 
 namespace roing::vk {
+	enum class SceneBindings { eGlobals = 0, eObjDescs = 1, eTextures = 2, eImplicits = 3 };
+	enum class RtxBindings { eTlas = 0, eOutImage = 1 };
+	enum class DescriptorSupport : uint32_t { CORE_1_0 = 0, CORE_1_2 = 1, INDEXING_EXT = 2 };
+
+	struct ModelLoadData final {
+		std::string fileName;
+		glm::mat4   transform;
+	};
+
 	void vkDestroyAccelerationStructureKHR(
 	        VkDevice device, VkAccelerationStructureKHR accelerationStructure, const VkAllocationCallbacks *pAllocator
 	);
@@ -31,12 +41,13 @@ namespace roing::vk {
 		VkAccelerationStructureBuildSizesInfoKHR sizeInfo{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR
 		};
 		const VkAccelerationStructureBuildRangeInfoKHR *rangeInfo{};
-		AccelerationStructure                           accelerationStructure{};
+		AccelerationStructure                           accelerationStructure;
 	};
 
 	class Device final {
 	public:
-		Device(const Surface &surface, VkPhysicalDevice physicalDevice, const Window &window);
+		Device(const Surface &surface, VkPhysicalDevice physicalDevice, const Window &window,
+		       const std::vector<ModelLoadData> &models);
 
 		~Device() noexcept;
 
@@ -46,23 +57,11 @@ namespace roing::vk {
 		Device(Device &&)            = delete;
 		Device &operator=(Device &&) = delete;
 
-		//		Device(Device &&other) noexcept
-		//		    : m_Device{other.m_Device}
-		//		    , m_CommandPool{other.m_CommandPool}
-		//		    , m_GraphicsQueue{other.m_GraphicsQueue}
-		//		    , m_PresentQueue{other.m_PresentQueue} {
-		//			other.m_Device = nullptr;
-		//		};
-		//
-		//		Device &operator=(Device &&other) noexcept {
-		//			m_Device        = other.m_Device;
-		//			other.m_Device  = nullptr;
-		//			m_CommandPool   = other.m_CommandPool;
-		//			m_GraphicsQueue = other.m_GraphicsQueue;
-		//			m_PresentQueue  = other.m_PresentQueue;
-		//
-		//			return *this;
-		//		}
+		void CreateRtDescriptorSet();
+
+		void UpdateRtDescriptorSet();
+
+		void UpdatePostDescriptorSet();
 
 		[[nodiscard]]
 		VkDevice GetHandle() const noexcept {
@@ -133,7 +132,73 @@ namespace roing::vk {
 			return m_Swapchain;
 		}
 
+		[[nodiscard]]
+		VkDescriptorSet GetDescriptorSet() const noexcept {
+			return m_DescSet;
+		}
+
+		[[nodiscard]]
+		QueueFamilyIndices GetQueueFamilyIndices() const noexcept {
+			return m_QueueFamilyIndices;
+		}
+
+		[[nodiscard]]
+		bool DrawFrame(Window &window);
+
+		static uint32_t
+		FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+		std::vector<VkDescriptorSetLayoutBinding> m_PostDescriptorSetLayoutBindings{};
+		std::vector<VkDescriptorBindingFlags>     m_PostDescriptorSetLayoutBindingFlags{};
+		VkDescriptorPool                          m_PostDescriptorPool{};
+		VkDescriptorSetLayout                     m_PostDescriptorSetLayout{};
+		VkDescriptorSet                           m_PostDescriptorSet{};
+		VkPipeline                                m_PostPipeline{};
+		VkPipelineLayout                          m_PostPipelineLayout{};
+		VkRenderPass                              m_RenderPass{};
+
+
 	private:
+		void FillRtDescriptorSet();
+
+		void CreatePostDescriptorSet();
+
+		void CreatePostPipeline();
+
+		void CreatePostRenderPass();
+
+		[[nodiscard]]
+		Model LoadModel(VkPhysicalDevice physicalDevice, const std::string &fileName);
+
+		[[nodiscard]]
+		VkDescriptorPool CreatePool(uint32_t maxSets = 1, VkDescriptorPoolCreateFlags flags = 0);
+
+		[[nodiscard]]
+		VkDescriptorSetLayout CreateDescriptorSetLayout(
+		        VkDescriptorSetLayoutCreateFlags flags, std::vector<VkDescriptorBindingFlags> &bindingFlags,
+		        std::vector<VkDescriptorSetLayoutBinding> &bindings
+		);
+
+		void AddRequiredPoolSizes(std::vector<VkDescriptorPoolSize> &poolSizes, uint32_t numSets);
+
+		[[nodiscard]]
+		static VkWriteDescriptorSet MakeWrite(
+		        const std::vector<VkDescriptorSetLayoutBinding> &bindings, VkDescriptorSet dstSet, uint32_t dstBinding,
+		        uint32_t arrayElement
+		);
+
+		[[nodiscard]]
+		static VkWriteDescriptorSet MakeWrite(
+		        const std::vector<VkDescriptorSetLayoutBinding> &bindings, VkDescriptorSet dstSet, uint32_t dstBinding,
+		        const VkWriteDescriptorSetAccelerationStructureKHR *pAccelerationStructure, uint32_t arrayElement
+		);
+
+		[[nodiscard]]
+		static VkWriteDescriptorSet MakeWrite(
+		        const std::vector<VkDescriptorSetLayoutBinding> &bindings, VkDescriptorSet dstSet, uint32_t dstBinding,
+		        const VkDescriptorImageInfo *pImageInfo, uint32_t arrayElement
+		);
+
 		[[nodiscard]]
 		VkDeviceAddress GetBlasDeviceAddress(uint32_t blasId) const;
 
@@ -186,9 +251,6 @@ namespace roing::vk {
 		        uint32_t firstQuery
 		);
 
-		static uint32_t
-		FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties);
-
 		static constexpr std::array<const char *, 1> VALIDATION_LAYERS{"VK_LAYER_KHRONOS_validation"};
 
 		VkDevice            m_Device{};
@@ -198,6 +260,16 @@ namespace roing::vk {
 		std::vector<Buffer> m_AccelerationStructureBuffers{};
 		Swapchain           m_Swapchain;
 
+		std::vector<VkDescriptorSetLayoutBinding> m_DescriptorSetLayoutBindings{};
+		std::vector<VkDescriptorBindingFlags>     m_DescriptorBindingFlags{};
+		VkDescriptorPool                          m_DescPool{};
+		VkDescriptorSetLayout                     m_DescSetLayout{};
+		VkDescriptorSet                           m_DescSet{};
+
+		QueueFamilyIndices m_QueueFamilyIndices{};
+
+		std::vector<Model>                      m_Models;
+		std::vector<ModelInstance>              m_ModelInstances;
 		std::vector<BuildAccelerationStructure> m_Blas{};
 		std::optional<AccelerationStructure>    m_Tlas{};
 	};

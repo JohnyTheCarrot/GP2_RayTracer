@@ -2,7 +2,9 @@
 #include "src/utils/debug.h"
 
 namespace roing::vk {
-	Window::Window(int width, int height, std::string_view title) {
+	Window::Window(uint32_t width, uint32_t height, std::string_view title)
+	    : m_Width{width}
+	    , m_Height{height} {
 		glfwInit();
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
@@ -19,7 +21,7 @@ namespace roing::vk {
 		return true;
 	}
 
-	void Window::FramebufferResizeCallback(GLFWwindow *pApplication, int, int) {
+	void Window::FramebufferResizeCallback(GLFWwindow *pApplication, int width, int height) {
 		auto appPtr{reinterpret_cast<Window *>(pApplication)};
 		appPtr->m_WasResized = true;
 	}

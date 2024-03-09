@@ -29,8 +29,7 @@ set(SHADER_SOURCE_DIR "shaders")
 set(SHADER_BINARY_DIR "shaders")
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
-        "${SHADER_SOURCE_DIR}/*.frag"
-        "${SHADER_SOURCE_DIR}/*.vert"
+        "${SHADER_SOURCE_DIR}/*.*"
 )
 
 foreach (GLSL ${GLSL_SOURCE_FILES})
@@ -38,7 +37,7 @@ foreach (GLSL ${GLSL_SOURCE_FILES})
     set(SPIRV "${SHADER_BINARY_DIR}/${FILE_NAME}.spv")
     add_custom_command(
             OUTPUT ${SPIRV}
-            COMMAND ${Vulkan_GLSLC_EXECUTABLE} ${GLSL} -o ${SPIRV}
+            COMMAND ${Vulkan_GLSLC_EXECUTABLE} ${GLSL} -c --target-env=vulkan1.2 -o ${SPIRV}
             DEPENDS ${GLSL}
     )
     list(APPEND SPIRV_BINARY_FILES ${SPIRV})

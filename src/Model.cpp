@@ -7,15 +7,14 @@ namespace roing {
 	        VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<Vertex> &vertices,
 	        const std::vector<uint32_t> &indices
 	)
-	    : m_Device{device.GetHandle()} {
-		CreateVertexBuffer(physicalDevice, device, vertices);
-		CreateIndexBuffer(physicalDevice, device, indices);
-
-		m_VertexCount = vertices.size();
-		m_IndexCount  = indices.size();
+	    : m_Device{device.GetHandle()}
+	    , m_VertexBuffer{CreateVertexBuffer(physicalDevice, device, vertices)}
+	    , m_IndexBuffer{CreateIndexBuffer(physicalDevice, device, indices)}
+	    , m_VertexCount{static_cast<uint32_t>(vertices.size())}
+	    , m_IndexCount{static_cast<uint32_t>(indices.size())} {
 	}
 
-	void Model::CreateVertexBuffer(
+	vk::Buffer Model::CreateVertexBuffer(
 	        VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<Vertex> &vertices
 	) {
 		VkDeviceSize bufferSize{sizeof(Vertex) * vertices.size()};
@@ -26,23 +25,25 @@ namespace roing {
 		)};
 
 		void *data;
-		vkMapMemory(device.GetHandle(), stagingBuffer.GetMemory(), 0, bufferSize, 0, &data);
+		vkMapMemory(device.GetHandle(), stagingBuffer.GetMemoryHandle(), 0, bufferSize, 0, &data);
 		memcpy(data, vertices.data(), bufferSize);
-		vkUnmapMemory(device.GetHandle(), stagingBuffer.GetMemory());
+		vkUnmapMemory(device.GetHandle(), stagingBuffer.GetMemoryHandle());
 
-		m_VertexBuffer = device.CreateBuffer(
+		vk::Buffer buffer{device.CreateBuffer(
 		        physicalDevice, bufferSize,
 		        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
 		                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR |
 		                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
 		                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 		        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-		);
+		)};
 
-		device.CopyBuffer(stagingBuffer.GetHandle(), m_VertexBuffer.GetHandle(), bufferSize);
+		device.CopyBuffer(stagingBuffer.GetHandle(), buffer.GetHandle(), bufferSize);
+
+		return buffer;
 	}
 
-	void Model::CreateIndexBuffer(
+	vk::Buffer Model::CreateIndexBuffer(
 	        VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<uint32_t> &indices
 	) {
 		VkDeviceSize bufferSize{sizeof(indices[0]) * indices.size()};
@@ -53,20 +54,22 @@ namespace roing {
 		)};
 
 		void *data;
-		vkMapMemory(device.GetHandle(), stagingBuffer.GetMemory(), 0, bufferSize, 0, &data);
+		vkMapMemory(device.GetHandle(), stagingBuffer.GetMemoryHandle(), 0, bufferSize, 0, &data);
 		memcpy(data, indices.data(), bufferSize);
-		vkUnmapMemory(device.GetHandle(), stagingBuffer.GetMemory());
+		vkUnmapMemory(device.GetHandle(), stagingBuffer.GetMemoryHandle());
 
-		m_IndexBuffer = device.CreateBuffer(
+		vk::Buffer buffer{device.CreateBuffer(
 		        physicalDevice, bufferSize,
 		        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
 		                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR |
 		                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
 		                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 		        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-		);
+		)};
 
-		device.CopyBuffer(stagingBuffer.GetHandle(), m_IndexBuffer.GetHandle(), bufferSize);
+		device.CopyBuffer(stagingBuffer.GetHandle(), buffer.GetHandle(), bufferSize);
+
+		return buffer;
 	}
 
 	void Model::DrawModel(VkCommandBuffer commandBuffer) const {

@@ -9,7 +9,7 @@ namespace roing::vk {
 
 	class Window final {
 	public:
-		Window(int width, int height, std::string_view title);
+		Window(uint32_t width, uint32_t height, std::string_view title);
 
 		~Window() noexcept;
 
@@ -32,11 +32,23 @@ namespace roing::vk {
 			return m_WasResized;
 		}
 
+		[[nodiscard]]
+		uint32_t GetWidth() const noexcept {
+			return m_Width;
+		}
+
+		[[nodiscard]]
+		uint32_t GetHeight() const noexcept {
+			return m_Height;
+		}
+
 	private:
 		static void FramebufferResizeCallback(GLFWwindow *pWindow, int width, int height);
 
 		bool        m_WasResized{false};
 		GLFWwindow *m_pWindow{};
+		uint32_t    m_Width{0};
+		uint32_t    m_Height{0};
 	};
 
 }// namespace roing::vk
