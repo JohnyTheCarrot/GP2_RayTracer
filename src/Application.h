@@ -38,6 +38,8 @@ namespace roing {
 
 		~Application() {
 			DEBUG("Terminating application");
+			vkDestroyDescriptorPool(m_Device.GetHandle(), m_DescPool, nullptr);
+			vkDestroyDescriptorSetLayout(m_Device.GetHandle(), m_DescSetLayout, nullptr);
 			glfwTerminate();
 		}
 
