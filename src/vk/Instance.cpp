@@ -1,6 +1,7 @@
 #include "Instance.h"
 #include "Device.h"
 #include "PhysicalDeviceUtils.h"
+#include "src/utils/debug.h"
 #include <algorithm>
 #include <cstring>
 #include <iostream>
@@ -16,10 +17,12 @@ namespace roing::vk {
 		DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessenger, nullptr);
 #endif
 
+		DEBUG("Destroying instance...");
 		vkDestroyInstance(m_Instance, nullptr);
+		DEBUG("Instance destroyed");
 	}
 
-	void Instance::Init() {
+	Instance::Instance() {
 #ifdef ENABLE_VALIDATION_LAYERS
 		if (!CheckValidationLayerSupport()) {
 			throw std::runtime_error{"Validation layers requested but not available"};

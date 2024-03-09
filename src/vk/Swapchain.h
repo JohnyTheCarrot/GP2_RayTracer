@@ -16,37 +16,21 @@ namespace roing::vk {
 	public:
 		Swapchain() = default;
 
-		Swapchain(Device *pParentDevice, const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice);
-
 		~Swapchain();
+
+		void
+		Create(Device *pParentDevice, const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice);
+
+		void
+		Recreate(Device *pParentDevice, const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice);
+
+		void Cleanup();
 
 		Swapchain(const Swapchain &)            = delete;
 		Swapchain &operator=(const Swapchain &) = delete;
 
-		Swapchain(Swapchain &&other) noexcept
-		    : m_pParentDevice{other.m_pParentDevice}
-		    , m_SwapChain{other.m_SwapChain}
-		    , m_SwapChainImageFormat{other.m_SwapChainImageFormat}
-		    , m_SwapChainExtent{other.m_SwapChainExtent}
-		    , m_SwapChainImages{std::move(other.m_SwapChainImages)}
-		    , m_SwapChainImageViews{std::move(other.m_SwapChainImageViews)}
-		    , m_SwapChainFramebuffers{std::move(other.m_SwapChainFramebuffers)} {
-			other.m_pParentDevice = nullptr;
-		}
-
-		Swapchain &operator=(Swapchain &&other) noexcept {
-			m_pParentDevice       = other.m_pParentDevice;
-			other.m_pParentDevice = nullptr;
-
-			m_SwapChain             = other.m_SwapChain;
-			m_SwapChainImageFormat  = other.m_SwapChainImageFormat;
-			m_SwapChainExtent       = other.m_SwapChainExtent;
-			m_SwapChainImages       = std::move(other.m_SwapChainImages);
-			m_SwapChainImageViews   = std::move(other.m_SwapChainImageViews);
-			m_SwapChainFramebuffers = std::move(other.m_SwapChainFramebuffers);
-
-			return *this;
-		}
+		Swapchain(Swapchain &&)            = delete;
+		Swapchain &operator=(Swapchain &&) = delete;
 
 		[[nodiscard]]
 		VkSwapchainKHR GetHandle() const noexcept {
@@ -69,7 +53,14 @@ namespace roing::vk {
 		[[nodiscard]]
 		bool DrawFrame(roing::vk::Window &window, const std::vector<Model> &models);
 
+		[[nodiscard]]
+		VkImageView GetCurrentImageView() const noexcept;
+
 	private:
+		void Init(Device *pParentDevice, const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice);
+
+		void CleanupOnlySwapchain();
+
 		[[nodiscard]]
 		VkShaderModule CreateShaderModule(std::vector<char> &&code);
 

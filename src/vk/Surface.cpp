@@ -1,6 +1,7 @@
 #include "Surface.h"
 #include "Instance.h"
 #include "Window.h"
+#include "src/utils/debug.h"
 #include <stdexcept>
 #include <vulkan/vk_enum_string_helper.h>
 
@@ -9,7 +10,9 @@ namespace roing::vk {
 		if (m_Surface == VK_NULL_HANDLE)
 			return;
 
+		DEBUG("Destroying surface...");
 		vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+		DEBUG("Surface destroyed");
 	}
 
 	Surface::Surface(const Instance &instance, const Window &window)

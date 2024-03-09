@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "src/utils/debug.h"
 
 namespace roing::vk {
 	Window::Window(int width, int height, std::string_view title) {
@@ -27,7 +28,11 @@ namespace roing::vk {
 		if (!m_pWindow)
 			return;
 
+		DEBUG("Destroying window...");
+
 		glfwDestroyWindow(m_pWindow);
 		m_pWindow = nullptr;
+
+		DEBUG("Window destroyed");
 	}
 }// namespace roing::vk

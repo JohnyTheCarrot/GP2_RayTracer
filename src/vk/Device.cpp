@@ -4,6 +4,7 @@
 #include "QueueFamilyIndices.h"
 #include "Window.h"
 #include "src/utils/ToTransformMatrixKHR.h"
+#include "src/utils/debug.h"
 #include <set>
 #include <vulkan/vk_enum_string_helper.h>
 
@@ -12,6 +13,8 @@ namespace roing::vk {
 		if (m_Device == VK_NULL_HANDLE)
 			return;
 
+		DEBUG("Destroying device...");
+		m_Swapchain.Cleanup();
 		m_Blas.clear();
 		m_Tlas = std::nullopt;
 		m_AccelerationStructureBuffers.clear();
@@ -19,9 +22,10 @@ namespace roing::vk {
 		vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
 
 		vkDestroyDevice(m_Device, nullptr);
+		DEBUG("Device destroyed");
 	}
 
-	Device::Device(const Surface &surface, VkPhysicalDevice physicalDevice) {
+	Device::Device(const Surface &surface, VkPhysicalDevice physicalDevice, const Window &window) {
 		QueueFamilyIndices indices{physical_device::FindQueueFamilies(surface, physicalDevice)};
 
 		std::vector<VkDeviceQueueCreateInfo> queueCreateInfos{};
@@ -83,6 +87,9 @@ namespace roing::vk {
 
 		vkGetDeviceQueue(m_Device, indices.graphicsFamily.value(), 0, &m_GraphicsQueue);
 		vkGetDeviceQueue(m_Device, indices.presentFamily.value(), 0, &m_PresentQueue);
+
+		CreateCommandPool(surface, physicalDevice);
+		m_Swapchain.Create(this, window, surface, physicalDevice);
 	}
 
 	void Device::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
@@ -153,15 +160,7 @@ namespace roing::vk {
 		}
 	}
 
-	void Device::CreateSwapchain(
-	        const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice, Swapchain *pSwapchain
-	) {
-		*pSwapchain = Swapchain{this, window, surface, physicalDevice};
-	}
-
-	void Device::RecreateSwapchain(
-	        const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice, Swapchain *pSwapchain
-	) {
+	void Device::RecreateSwapchain(const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice) {
 		int width, height;
 		glfwGetFramebufferSize(window.Get(), &width, &height);
 		while (width == 0 || height == 0) {
@@ -171,13 +170,15 @@ namespace roing::vk {
 
 		vkDeviceWaitIdle(m_Device);
 
-		*pSwapchain = Swapchain{this, window, surface, physicalDevice};
+		m_Swapchain.Recreate(this, window, surface, physicalDevice);
 	}
 
 	Buffer Device::CreateBuffer(
 	        VkPhysicalDevice physicalDevice, VkDeviceSize size, VkBufferUsageFlags usage,
 	        VkMemoryPropertyFlags properties
 	) const {
+		DEBUG("Creating buffer of size " << size << "...");
+
 		VkBuffer       buffer;
 		VkDeviceMemory bufferMemory;
 
@@ -213,6 +214,7 @@ namespace roing::vk {
 
 		vkBindBufferMemory(GetHandle(), buffer, bufferMemory, 0);
 
+		DEBUG("Buffer created");
 		return Buffer{*this, buffer, bufferMemory};
 	}
 
@@ -322,7 +324,7 @@ namespace roing::vk {
 	        VkPhysicalDevice physicalDevice, const std::vector<VkAccelerationStructureInstanceKHR> &instances,
 	        VkBuildAccelerationStructureFlagsKHR flags, bool update
 	) {
-		assert(m_Tlas->accStructHandle == VK_NULL_HANDLE || update);
+		assert(!m_Tlas.has_value() || m_Tlas->accStructHandle == VK_NULL_HANDLE || update);
 		uint32_t countInstance{static_cast<uint32_t>(instances.size())};
 
 		VkCommandBuffer cmdBuf{CreateCommandBuffer()};
@@ -596,7 +598,8 @@ namespace roing::vk {
 	void Device::CreateTopLevelAccelerationStructure(
 	        VkPhysicalDevice physicalDevice, const std::vector<ModelInstance> &modelInstances
 	) {
-		std::vector<VkAccelerationStructureInstanceKHR> tlas(modelInstances.size());
+		std::vector<VkAccelerationStructureInstanceKHR> tlas{};
+		tlas.reserve(modelInstances.size());
 
 		for (const ModelInstance &modelInstance: modelInstances) {
 			VkAccelerationStructureInstanceKHR rayInst{};

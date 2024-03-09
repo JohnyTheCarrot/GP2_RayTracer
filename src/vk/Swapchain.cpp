@@ -4,18 +4,40 @@
 #include "Device.h"
 #include "PhysicalDeviceUtils.h"
 #include "QueueFamilyIndices.h"
+#include "src/utils/debug.h"
 #include <vulkan/vk_enum_string_helper.h>
 
 namespace roing::vk {
 	Swapchain::~Swapchain() {
-		if (m_pParentDevice == nullptr)
+		Cleanup();
+	}
+
+	void Swapchain::Cleanup() {
+		if (m_pParentDevice == nullptr || m_pParentDevice->GetHandle() == VK_NULL_HANDLE)
 			return;
+
+		DEBUG("Destroying swapchain...");
+		CleanupOnlySwapchain();
 
 		for (size_t i{0}; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 			vkDestroySemaphore(m_pParentDevice->GetHandle(), m_ImageAvailableSemaphores[i], nullptr);
 			vkDestroySemaphore(m_pParentDevice->GetHandle(), m_RenderFinishedSemaphores[i], nullptr);
 			vkDestroyFence(m_pParentDevice->GetHandle(), m_InFlightFences[i], nullptr);
 		}
+
+		vkDestroyPipeline(m_pParentDevice->GetHandle(), m_GraphicsPipeline, nullptr);
+
+		vkDestroyPipelineLayout(m_pParentDevice->GetHandle(), m_PipelineLayout, nullptr);
+
+		vkDestroyRenderPass(m_pParentDevice->GetHandle(), m_RenderPass, nullptr);
+
+		DEBUG("Swapchain destroyed");
+		m_pParentDevice = nullptr;
+	}
+
+	void Swapchain::CleanupOnlySwapchain() {
+		if (m_pParentDevice->GetHandle() == VK_NULL_HANDLE)
+			return;
 
 		for (auto framebuffer: m_SwapChainFramebuffers) {
 			vkDestroyFramebuffer(m_pParentDevice->GetHandle(), framebuffer, nullptr);
@@ -25,19 +47,13 @@ namespace roing::vk {
 			vkDestroyImageView(m_pParentDevice->GetHandle(), imageView, nullptr);
 		}
 
-		vkDestroyPipeline(m_pParentDevice->GetHandle(), m_GraphicsPipeline, nullptr);
-
-		vkDestroyPipelineLayout(m_pParentDevice->GetHandle(), m_PipelineLayout, nullptr);
-
 		vkDestroySwapchainKHR(m_pParentDevice->GetHandle(), m_SwapChain, nullptr);
-
-		vkDestroyRenderPass(m_pParentDevice->GetHandle(), m_RenderPass, nullptr);
 	}
 
-	Swapchain::Swapchain(
+	void Swapchain::Init(
 	        Device *pParentDevice, const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice
-	)
-	    : m_pParentDevice{pParentDevice} {
+	) {
+		m_pParentDevice = pParentDevice;
 		const vk::SwapChainSupportDetails swapChainSupport{surface.QuerySwapChainSupport(physicalDevice)};
 
 		const VkSurfaceFormatKHR surfaceFormat{ChooseSwapSurfaceFormat(swapChainSupport.formats)};
@@ -59,7 +75,8 @@ namespace roing::vk {
 		createInfo.imageColorSpace  = surfaceFormat.colorSpace;
 		createInfo.imageExtent      = extent;
 		createInfo.imageArrayLayers = 1;
-		createInfo.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		createInfo.imageUsage =
+		        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
 		vk::QueueFamilyIndices  indices{vk::physical_device::FindQueueFamilies(surface, physicalDevice)};
 		std::array<uint32_t, 2> queueFamilyIndices{indices.graphicsFamily.value(), indices.presentFamily.value()};
@@ -99,7 +116,7 @@ namespace roing::vk {
 		const auto formatIterator{std::find_if(
 		        availableFormats.cbegin(), availableFormats.cend(),
 		        [](const VkSurfaceFormatKHR &format) {
-			        return format.format == VK_FORMAT_B8G8R8A8_SRGB &&
+			        return format.format == VK_FORMAT_R32G32B32A32_SFLOAT &&
 			               format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 		        }
 		)};
@@ -559,4 +576,34 @@ namespace roing::vk {
 
 		return shaderModule;
 	}
+
+	VkImageView Swapchain::GetCurrentImageView() const noexcept {
+		return m_SwapChainImageViews[m_CurrentFrame];
+	}
+
+	void Swapchain::Create(
+	        Device *pParentDevice, const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice
+	) {
+		Init(pParentDevice, window, surface, physicalDevice);
+
+		CreateImageViews();
+		CreateRenderPass();
+		CreateGraphicsPipeline();
+		CreateFramebuffers();
+		CreateCommandBuffers();
+		CreateSyncObjects();
+	}
+
+	void Swapchain::Recreate(
+	        roing::vk::Device *pParentDevice, const roing::vk::Window &window, const roing::vk::Surface &surface,
+	        VkPhysicalDevice physicalDevice
+	) {
+		CleanupOnlySwapchain();
+
+		Init(pParentDevice, window, surface, physicalDevice);
+
+		CreateImageViews();
+		CreateFramebuffers();
+	}
+
 }// namespace roing::vk

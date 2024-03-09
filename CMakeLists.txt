@@ -64,6 +64,12 @@ endif ()
 
 add_executable(${PROJECT_NAME} ${SRC_FILES} ${GLSL_SOURCE_FILES})
 
+add_custom_command(
+        TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/resources ${CMAKE_BINARY_DIR}/resources
+)
+
 add_dependencies(${PROJECT_NAME} Shaders)
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${glm_SOURCE_DIR})

@@ -15,7 +15,7 @@ namespace roing::vk {
 
 	class Instance final {
 	public:
-		Instance() = default;
+		Instance();
 
 		~Instance() noexcept;
 
@@ -46,8 +46,6 @@ namespace roing::vk {
 		VkInstance Get() const noexcept {
 			return m_Instance;
 		}
-
-		void Init();
 
 		[[nodiscard]]
 		VkPhysicalDevice PickPhysicalDevice(const Surface &surface) const;

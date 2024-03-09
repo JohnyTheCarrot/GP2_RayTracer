@@ -9,43 +9,28 @@ namespace roing::vk {
 
 	class Window final {
 	public:
-		Window() = default;
-
 		Window(int width, int height, std::string_view title);
 
 		~Window() noexcept;
 
-		Window(const Window &) = delete;
-
+		Window(const Window &)            = delete;
 		Window &operator=(const Window &) = delete;
 
-		Window(Window &&other) noexcept
-		    : m_pWindow(other.m_pWindow)
-		    , m_WasResized{other.m_WasResized} {
-			other.m_pWindow = nullptr;
-		}
-
-		Window &operator=(Window &&other) noexcept {
-			m_pWindow       = other.m_pWindow;
-			other.m_pWindow = nullptr;
-			m_WasResized    = other.m_WasResized;
-			return *this;
-		}
-
-		GLFWwindow &operator->() noexcept {
-			return *m_pWindow;
-		}
-
-		GLFWwindow &operator*() noexcept {
-			return *m_pWindow;
-		}
+		Window(Window &&)            = delete;
+		Window &operator=(Window &&) = delete;
 
 		[[nodiscard]]
 		GLFWwindow *Get() const noexcept {
 			return m_pWindow;
 		}
 
+		[[nodiscard]]
 		bool PollWasResized();
+
+		[[nodiscard]]
+		bool WasResized() const noexcept {
+			return m_WasResized;
+		}
 
 	private:
 		static void FramebufferResizeCallback(GLFWwindow *pWindow, int width, int height);

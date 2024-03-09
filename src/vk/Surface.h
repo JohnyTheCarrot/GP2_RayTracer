@@ -18,8 +18,6 @@ namespace roing::vk {
 
 	class Surface final {
 	public:
-		Surface() = default;
-
 		Surface(const Instance &instance, const Window &window);
 
 		~Surface() noexcept;

@@ -1,11 +1,14 @@
 #include "Buffer.h"
 #include "Device.h"
+#include "src/utils/debug.h"
+#include <iostream>
 
 namespace roing::vk {
 	Buffer::~Buffer() {
 		if (m_Buffer == VK_NULL_HANDLE)
 			return;
 
+		DEBUG("Destroying buffer and freeing buffer memory");
 		vkDestroyBuffer(m_Device, m_Buffer, nullptr);
 		vkFreeMemory(m_Device, m_BufferMemory, nullptr);
 	}
