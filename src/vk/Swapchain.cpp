@@ -6,6 +6,7 @@
 #include "RayTracingExtFunctions.h"
 #include "src/utils/debug.h"
 #include <glm/ext/matrix_clip_space.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <vulkan/vk_enum_string_helper.h>
 
 namespace roing::vk {
@@ -302,7 +303,7 @@ namespace roing::vk {
 		        .subresourceRange    = imageSubresourceRange
 		};
 
-		m_PushConstantRay.clearColor     = glm::vec4{1.0f, 1.0f, 0.0f, 1.0f};
+		m_PushConstantRay.clearColor     = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
 		m_PushConstantRay.lightPosition  = glm::vec3{10.f, 15.f, 8.f};
 		m_PushConstantRay.lightIntensity = 100.f;
 		m_PushConstantRay.lightType      = 0;
@@ -374,7 +375,7 @@ namespace roing::vk {
 
 		GlobalUniforms hostUBO{};
 		// TODO: camera class
-		const glm::mat4 view{1.f};
+		const glm::mat4 view{m_ViewMatrix};
 		glm::mat4       projection{glm::perspectiveRH_ZO(glm::radians(45.0f), aspectRatio, 0.1f, 1000.f)};
 		projection[1][1] *= -1.f;// inverting y for vulkan
 
@@ -463,6 +464,18 @@ namespace roing::vk {
 	}
 
 	bool Swapchain::DrawFrame(const Device &device, roing::vk::Window &window, const std::vector<Model> &models) {
+		//		static float lastXPos{}, lastYPos{};
+		//		double       xpos, ypos;
+		//		glfwGetCursorPos(window.GetWindowPtr(), &xpos, &ypos);
+		//		if (lastXPos != 0.0f || lastYPos != 0.0f) {
+		//			m_ViewMatrix =
+		//			        glm::rotate(m_ViewMatrix, glm::radians(static_cast<float>(xpos) - lastXPos), glm::vec3(0, 1, 0));
+		//			m_ViewMatrix =
+		//			        glm::rotate(m_ViewMatrix, glm::radians(static_cast<float>(ypos) - lastYPos), glm::vec3(1, 0, 0));
+		//		}
+		//		lastXPos = static_cast<float>(xpos);
+		//		lastYPos = static_cast<float>(ypos);
+
 		vkWaitForFences(m_pParentDevice->GetHandle(), 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
 
 		uint32_t imageIndex{};
@@ -714,6 +727,8 @@ namespace roing::vk {
 		//		CreateFramebuffers();
 		CreateCommandBuffers();
 		CreateSyncObjects();
+		glfwSetWindowUserPointer(window.GetWindowPtr(), this);
+		glfwSetKeyCallback(window.GetWindowPtr(), OnKey);
 	}
 
 	void Swapchain::Recreate(
@@ -892,3 +907,29 @@ namespace roing::vk {
 	}
 
 }// namespace roing::vk
+
+void OnKey(GLFWwindow *pSwapchain, int key, int scancode, int action, int mods) {
+	roing::vk::Swapchain *swapchain{reinterpret_cast<roing::vk::Swapchain *>(glfwGetWindowUserPointer(pSwapchain))};
+	constexpr float       speed{0.5f};
+
+	switch (key) {
+		case GLFW_KEY_W:
+			swapchain->m_ViewMatrix = glm::translate(swapchain->m_ViewMatrix, glm::vec3(0.0f, 0.0f, 1.0f) * speed);
+			break;
+		case GLFW_KEY_S:
+			swapchain->m_ViewMatrix = glm::translate(swapchain->m_ViewMatrix, glm::vec3(0.0f, 0.0f, -1.0f) * speed);
+			break;
+		case GLFW_KEY_A:
+			swapchain->m_ViewMatrix = glm::translate(swapchain->m_ViewMatrix, glm::vec3(1.0f, 0.0f, 0.0f) * speed);
+			break;
+		case GLFW_KEY_D:
+			swapchain->m_ViewMatrix = glm::translate(swapchain->m_ViewMatrix, glm::vec3(-1.0f, 0.0f, 0.0f) * speed);
+			break;
+		case GLFW_KEY_SPACE:
+			swapchain->m_ViewMatrix = glm::translate(swapchain->m_ViewMatrix, glm::vec3(0.0f, -1.0f, 0.0f) * speed);
+			break;
+		case GLFW_KEY_LEFT_SHIFT:
+			swapchain->m_ViewMatrix = glm::translate(swapchain->m_ViewMatrix, glm::vec3(0.0f, 1.0f, 0.0f) * speed);
+			break;
+	}
+}

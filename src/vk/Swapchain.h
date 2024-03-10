@@ -83,7 +83,8 @@ namespace roing::vk {
 		[[nodiscard]]
 		VkCommandBuffer GetCommandBuffer() const noexcept;
 
-		Buffer m_GlobalsBuffer;
+		Buffer    m_GlobalsBuffer;
+		glm::mat4 m_ViewMatrix{1.f};
 
 	private:
 		void Init(Device *pParentDevice, const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice);
@@ -163,5 +164,7 @@ namespace roing::vk {
 	};
 
 }// namespace roing::vk
+
+void OnKey(GLFWwindow *pSwapchain, int key, int scancode, int action, int mods);
 
 #endif//PORTAL2RAYTRACED_SWAPCHAIN_H

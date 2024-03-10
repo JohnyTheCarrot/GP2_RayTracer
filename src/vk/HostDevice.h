@@ -23,6 +23,11 @@ ENUM(RtxBindings) eTlas = 0, eOutImage = 1, eGlobals = 2, eObjDescs = 3, eTextur
 
 // clang-format on
 
+struct Vertex {
+	vec3 pos;
+	vec3 norm;
+};
+
 struct GlobalUniforms {
 	mat4 viewProj;
 	mat4 viewInverse;

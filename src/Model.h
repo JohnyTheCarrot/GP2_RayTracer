@@ -2,7 +2,7 @@
 #define PORTAL2RAYTRACED_MODEL_H
 
 #define GLFW_INCLUDE_VULKAN
-#include "Vertex.h"
+#include "src/vk/HostDevice.h"
 #include "vk/Buffer.h"
 #include <GLFW/glfw3.h>
 #include <vector>

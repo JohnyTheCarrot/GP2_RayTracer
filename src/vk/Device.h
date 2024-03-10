@@ -74,13 +74,15 @@ namespace roing::vk {
 		// Return value: whether to recreate the swap chain
 		bool QueuePresent(const VkPresentInfoKHR *pPresentInfo, Window &window);
 
-		static constexpr std::array<const char *, 6> DEVICE_EXTENSIONS{
+		static constexpr std::array<const char *, 8> DEVICE_EXTENSIONS{
 		        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 		        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
 		        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
 		        VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
 		        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-		        VK_KHR_SPIRV_1_4_EXTENSION_NAME
+		        VK_KHR_SPIRV_1_4_EXTENSION_NAME,
+		        VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME,
+		        VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME
 		};
 
 		void CreateCommandPool(const Surface &surface, VkPhysicalDevice physicalDevice);

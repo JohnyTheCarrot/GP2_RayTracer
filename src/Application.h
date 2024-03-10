@@ -4,7 +4,6 @@
 #define GLFW_INCLUDE_VULKAN
 #include "Model.h"
 #include "ModelInstance.h"
-#include "Vertex.h"
 #include "src/utils/debug.h"
 #include "vk/Device.h"
 #include "vk/Instance.h"
@@ -35,8 +34,7 @@ namespace roing {
 		              m_Surface,
 		              m_PhysicalDevice,
 		              m_Window,
-		              {{"medieval_building.obj", glm::translate(glm::mat4{1.f}, glm::vec3{0, 0, -10.f})},
-		               {"tractor.obj", glm::translate(glm::mat4{1.f}, glm::vec3{5, 0, -10.f})}}
+		              {{"medieval_building.obj", glm::translate(glm::mat4{1.f}, glm::vec3{0, 0, -10.f})}}
 		      } {};
 
 		~Application() {

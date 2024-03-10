@@ -116,7 +116,18 @@ namespace roing::vk {
 		SetUpRaytracing(physicalDevice, m_Models, m_ModelInstances);
 
 		CreateRtDescriptorSet();
-		m_ObjDescBuffer = CreateBuffer(physicalDevice, sizeof(ObjDesc), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+		VkDeviceSize objDescBufferSize{sizeof(ObjDesc) * m_ObjDescriptors.size()};
+		m_ObjDescBuffer = CreateBuffer(
+		        physicalDevice, objDescBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+		        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+		);
+
+		void *data;
+		std::cout << "objDescBuffer mem handle: " << m_ObjDescBuffer.GetMemoryHandle() << std::endl;
+		vkMapMemory(m_Device, m_ObjDescBuffer.GetMemoryHandle(), 0, objDescBufferSize, 0, &data);
+		std::cout << "data: " << std::hex << data << std::dec << std::endl;
+		memcpy(data, m_ObjDescriptors.data(), objDescBufferSize);
+		vkUnmapMemory(m_Device, m_ObjDescBuffer.GetMemoryHandle());
 
 		m_Swapchain.Create(this, window, surface, physicalDevice, m_DescSetLayout);
 
@@ -128,10 +139,10 @@ namespace roing::vk {
 		VkDescriptorImageInfo imageInfo{{}, m_Swapchain.GetOutputImageView(), VK_IMAGE_LAYOUT_GENERAL};
 
 		// TODO: repeated code
-		VkDescriptorBufferInfo              dbiUnif{m_Swapchain.m_GlobalsBuffer.GetHandle(), 0, VK_WHOLE_SIZE};
-		VkWriteDescriptorSet                globalWrite{MakeWrite(
-                m_DescriptorSetLayoutBindings, m_DescSet, static_cast<uint32_t>(RtxBindings::eGlobals), &dbiUnif, 0
-        )};
+		VkDescriptorBufferInfo dbiUnif{m_Swapchain.m_GlobalsBuffer.GetHandle(), 0, VK_WHOLE_SIZE};
+		VkWriteDescriptorSet   globalWrite{
+                MakeWrite(m_DescriptorSetLayoutBindings, m_DescSet, RtxBindings::eGlobals, &dbiUnif, 0)
+        };
 		std::array<VkWriteDescriptorSet, 4> writeDescriptorSets{globalWrite};
 		writeDescriptorSets[1] =
 		        MakeWrite(m_DescriptorSetLayoutBindings, m_DescSet, RtxBindings::eTlas, &descASInfo, 0);
@@ -271,10 +282,13 @@ namespace roing::vk {
 			memoryAllocateInfo.pNext = &flagsInfo;
 		}
 
+		std::cout << "trying" << std::endl;
 		if (const VkResult result{vkAllocateMemory(GetHandle(), &memoryAllocateInfo, nullptr, &bufferMemory)};
 		    result != VK_SUCCESS) {
+			std::cout << "failed " << string_VkResult(result) << std::endl;
 			throw std::runtime_error{std::string{"Failed to allocate memory: "} + string_VkResult(result)};
 		}
+		std::cout << "succeeded" << std::endl;
 
 		vkBindBufferMemory(GetHandle(), buffer, bufferMemory, 0);
 
@@ -956,14 +970,35 @@ namespace roing::vk {
 		std::vector<Vertex>   modelVertices{};
 		std::vector<uint32_t> modelIndices{};
 
-		const auto &shape{shapes[0]};
-		for (auto item: shape.mesh.indices) { modelIndices.push_back(item.vertex_index); }
-		for (int idx{0}; idx < attrib.vertices.size(); idx += 3) {
-			const float vx{static_cast<float>(attrib.vertices[idx + 0])};
-			const float vy{static_cast<float>(attrib.vertices[idx + 1])};
-			const float vz{static_cast<float>(attrib.vertices[idx + 2])};
+		//		const auto &shape{shapes[0]};
+		//		for (auto item: shape.mesh.indices) { modelIndices.push_back(item.vertex_index); }
+		//		for (int idx{0}; idx < attrib.vertices.size(); idx += 3) {
+		//			const float vx{static_cast<float>(attrib.vertices[idx + 0])};
+		//			const float vy{static_cast<float>(attrib.vertices[idx + 1])};
+		//			const float vz{static_cast<float>(attrib.vertices[idx + 2])};
+		//
+		//			modelVertices.emplace_back(glm::vec3{vx, vy, vz});
+		//		}
 
-			modelVertices.emplace_back(glm::vec3{vx, vy, vz});
+		for (const auto &shape: shapes) {
+			modelVertices.reserve(shape.mesh.indices.size() + modelVertices.size());
+			modelIndices.reserve(shape.mesh.indices.size() + modelIndices.size());
+
+			for (const auto &index: shape.mesh.indices) {
+				Vertex vertex{};
+				vertex.pos.x = attrib.vertices[3 * index.vertex_index + 0];
+				vertex.pos.y = attrib.vertices[3 * index.vertex_index + 1];
+				vertex.pos.z = attrib.vertices[3 * index.vertex_index + 2];
+
+				if (!attrib.normals.empty() && index.normal_index >= 0) {
+					vertex.norm.x = attrib.normals[3 * index.normal_index + 0];
+					vertex.norm.y = attrib.normals[3 * index.normal_index + 1];
+					vertex.norm.z = attrib.normals[3 * index.normal_index + 2];
+				}
+
+				modelVertices.emplace_back(vertex);
+				modelIndices.push_back(static_cast<int>(modelIndices.size()));
+			}
 		}
 
 		return Model{physicalDevice, *this, modelVertices, modelIndices};

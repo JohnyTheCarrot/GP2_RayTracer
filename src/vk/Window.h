@@ -42,6 +42,10 @@ namespace roing::vk {
 			return m_Height;
 		}
 
+		GLFWwindow *GetWindowPtr() const noexcept {
+			return m_pWindow;
+		}
+
 	private:
 		static void FramebufferResizeCallback(GLFWwindow *pWindow, int width, int height);
 

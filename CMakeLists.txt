@@ -29,7 +29,11 @@ set(SHADER_SOURCE_DIR "shaders")
 set(SHADER_BINARY_DIR "shaders")
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
-        "${SHADER_SOURCE_DIR}/*.*"
+        "${SHADER_SOURCE_DIR}/*.rchit"
+        "${SHADER_SOURCE_DIR}/*.rgen"
+        "${SHADER_SOURCE_DIR}/*.rmiss"
+        "${SHADER_SOURCE_DIR}/*.frag"
+        "${SHADER_SOURCE_DIR}/*.vert"
 )
 
 foreach (GLSL ${GLSL_SOURCE_FILES})
