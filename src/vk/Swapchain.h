@@ -2,6 +2,7 @@
 #define PORTAL2RAYTRACED_SWAPCHAIN_H
 
 #include "../Model.h"
+#include "HostDevice.h"
 #include "Texture.h"
 #include "Window.h"
 #include <vector>
@@ -12,13 +13,6 @@ namespace roing::vk {
 	class Device;
 
 	class Surface;
-
-	struct PushConstantRay final {
-		glm::vec4 clearColor;
-		glm::vec3 lightPosition;
-		float     lightIntensity;
-		int       lightType;
-	};
 
 	class Swapchain final {
 	public:
@@ -89,6 +83,8 @@ namespace roing::vk {
 		[[nodiscard]]
 		VkCommandBuffer GetCommandBuffer() const noexcept;
 
+		Buffer m_GlobalsBuffer;
+
 	private:
 		void Init(Device *pParentDevice, const Window &window, const Surface &surface, VkPhysicalDevice physicalDevice);
 
@@ -98,6 +94,8 @@ namespace roing::vk {
 		        VkCommandBuffer commandBuffer, uint32_t imageIndex, const std::vector<Model> &models,
 		        const Window &window, const Device &device
 		);
+
+		void UpdateUniformBuffer(VkCommandBuffer commandBuffer);
 
 		[[nodiscard]]
 		static VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats);

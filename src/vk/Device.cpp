@@ -1,4 +1,5 @@
 #include "Device.h"
+#include "HostDevice.h"
 #include "Instance.h"
 #include "PhysicalDeviceUtils.h"
 #include "QueueFamilyIndices.h"
@@ -19,6 +20,7 @@ namespace roing::vk {
 		vkDestroyDescriptorPool(m_Device, m_DescPool, nullptr);
 		vkDestroyDescriptorSetLayout(m_Device, m_DescSetLayout, nullptr);
 		m_Models.clear();
+		m_ObjDescBuffer.Destroy();
 		m_ModelInstances.clear();
 		m_Swapchain.Cleanup();
 		m_Blas.clear();
@@ -104,12 +106,44 @@ namespace roing::vk {
 		for (const auto &modelLoadData: models) {
 			const Model &model{m_Models.emplace_back(LoadModel(physicalDevice, modelLoadData.fileName))};
 			m_ModelInstances.emplace_back(&model, modelLoadData.transform, static_cast<uint32_t>(m_Models.size() - 1));
+			ObjDesc desc{};
+			desc.txtOffset     = 0;
+			desc.vertexAddress = model.GetVertexBufferAddress();
+			desc.indexAddress  = model.GetIndexBufferAddress();
+
+			m_ObjDescriptors.emplace_back(desc);
 		}
 		SetUpRaytracing(physicalDevice, m_Models, m_ModelInstances);
 
 		CreateRtDescriptorSet();
+		m_ObjDescBuffer = CreateBuffer(physicalDevice, sizeof(ObjDesc), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 
 		m_Swapchain.Create(this, window, surface, physicalDevice, m_DescSetLayout);
+
+		VkWriteDescriptorSetAccelerationStructureKHR descASInfo{
+		        VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR
+		};
+		descASInfo.accelerationStructureCount = 1;
+		descASInfo.pAccelerationStructures    = &m_Tlas->accStructHandle;
+		VkDescriptorImageInfo imageInfo{{}, m_Swapchain.GetOutputImageView(), VK_IMAGE_LAYOUT_GENERAL};
+
+		// TODO: repeated code
+		VkDescriptorBufferInfo              dbiUnif{m_Swapchain.m_GlobalsBuffer.GetHandle(), 0, VK_WHOLE_SIZE};
+		VkWriteDescriptorSet                globalWrite{MakeWrite(
+                m_DescriptorSetLayoutBindings, m_DescSet, static_cast<uint32_t>(RtxBindings::eGlobals), &dbiUnif, 0
+        )};
+		std::array<VkWriteDescriptorSet, 4> writeDescriptorSets{globalWrite};
+		writeDescriptorSets[1] =
+		        MakeWrite(m_DescriptorSetLayoutBindings, m_DescSet, RtxBindings::eTlas, &descASInfo, 0);
+		writeDescriptorSets[2] =
+		        MakeWrite(m_DescriptorSetLayoutBindings, m_DescSet, RtxBindings::eOutImage, &imageInfo, 0);
+
+		VkDescriptorBufferInfo dbiSceneDesc{m_ObjDescBuffer.GetHandle(), 0, VK_WHOLE_SIZE};
+		writeDescriptorSets[3] =
+		        MakeWrite(m_DescriptorSetLayoutBindings, m_DescSet, RtxBindings::eObjDescs, &dbiSceneDesc, 0);
+
+		vkUpdateDescriptorSets(m_Device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, nullptr);
+		//end of todo
 
 		CreatePostDescriptorSet();
 		CreatePostRenderPass();
@@ -359,14 +393,22 @@ namespace roing::vk {
 
 		VkCommandBuffer cmdBuf{CreateCommandBuffer()};
 
-		Buffer instancesBuffer{CreateBuffer(
-		        physicalDevice, sizeof(VkAccelerationStructureInstanceKHR) * instances.size(),
-		        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-		                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
-		                VK_BUFFER_USAGE_TRANSFER_DST_BIT
-		)};
+		VkDeviceSize instancesBufferSize{sizeof(VkAccelerationStructureInstanceKHR) * instances.size()};
+		Buffer       instancesBuffer{CreateBuffer(
+                physicalDevice, instancesBufferSize,
+                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+        )};
 
 		VkDeviceAddress instBufferAddr{instancesBuffer.GetDeviceAddress()};
+
+		void *data;
+		vkMapMemory(m_Device, instancesBuffer.GetMemoryHandle(), 0, instancesBufferSize, 0, &data);
+
+		memcpy(data, instances.data(), instancesBufferSize);
+
+		vkUnmapMemory(m_Device, instancesBuffer.GetMemoryHandle());
 
 		VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
 		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -379,7 +421,7 @@ namespace roing::vk {
 		Buffer scratchBuffer;
 		CmdCreateTlas(physicalDevice, cmdBuf, countInstance, instBufferAddr, scratchBuffer, flags, update, false);
 
-		Submit(cmdBuf);
+		SubmitAndWait(cmdBuf);
 	}
 
 	void Device::vkGetAccelerationStructureBuildSizesKHR(
@@ -726,6 +768,20 @@ namespace roing::vk {
 		        VK_SHADER_STAGE_RAYGEN_BIT_KHR
 		);
 
+		// Camera matrices
+		m_DescriptorSetLayoutBindings.emplace_back(
+		        static_cast<uint32_t>(RtxBindings::eGlobals), VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
+		        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
+		);
+
+		// Obj descriptions
+		m_DescriptorSetLayoutBindings.emplace_back(
+		        static_cast<uint32_t>(RtxBindings::eObjDescs), VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1,
+		        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+		);
+
+		// TODO: Textures
+
 		m_DescPool      = CreatePool();
 		m_DescSetLayout = CreateDescriptorSetLayout(0, m_DescriptorBindingFlags, m_DescriptorSetLayoutBindings);
 
@@ -738,10 +794,18 @@ namespace roing::vk {
 
 	void Device::UpdateRtDescriptorSet() {
 		VkDescriptorImageInfo imageInfo{{}, m_Swapchain.GetOutputImageView(), VK_IMAGE_LAYOUT_GENERAL};
-		VkWriteDescriptorSet  writeDescriptorSet{MakeWrite(
+		VkWriteDescriptorSet  outImageWrite{MakeWrite(
                 m_DescriptorSetLayoutBindings, m_DescSet, static_cast<uint32_t>(RtxBindings::eOutImage), &imageInfo, 0
         )};
-		vkUpdateDescriptorSets(m_Device, 1, &writeDescriptorSet, 0, nullptr);
+
+		VkDescriptorBufferInfo dbiUnif{m_Swapchain.m_GlobalsBuffer.GetHandle(), 0, VK_WHOLE_SIZE};
+		VkWriteDescriptorSet   globalWrite{MakeWrite(
+                m_DescriptorSetLayoutBindings, m_DescSet, static_cast<uint32_t>(RtxBindings::eGlobals), &dbiUnif, 0
+        )};
+		//		VkDescriptorBufferInfo              dbiSceneDesc{m};
+		std::array<VkWriteDescriptorSet, 2> writeDescriptorSets{outImageWrite, globalWrite};
+
+		vkUpdateDescriptorSets(m_Device, writeDescriptorSets.size(), writeDescriptorSets.data(), 0, nullptr);
 	}
 
 	VkDescriptorPool Device::CreatePool(uint32_t maxSets, VkDescriptorPoolCreateFlags flags) {
@@ -854,6 +918,16 @@ namespace roing::vk {
 		return descriptorSet;
 	}
 
+	VkWriteDescriptorSet Device::MakeWrite(
+	        const std::vector<VkDescriptorSetLayoutBinding> &bindings, VkDescriptorSet dstSet, uint32_t dstBinding,
+	        const VkDescriptorBufferInfo *pBufferInfo, uint32_t arrayElement
+	) {
+		VkWriteDescriptorSet descriptorSet{MakeWrite(bindings, dstSet, dstBinding, arrayElement)};
+		descriptorSet.pBufferInfo = pBufferInfo;
+
+		return descriptorSet;
+	}
+
 	bool Device::DrawFrame(Window &window) {
 		return m_Swapchain.DrawFrame(*this, window, m_Models);
 	}
@@ -872,54 +946,36 @@ namespace roing::vk {
 		}
 
 		if (!reader.Warning().empty()) {
-			std::cerr << "TinyObjReader: " << reader.Warning();
+			std::cerr << "TinyObjReader warning: " << reader.Warning();
 		}
 
 		const auto &attrib{reader.GetAttrib()};
 		const auto &shapes{reader.GetShapes()};
 		const auto &materials{reader.GetMaterials()};
 
-		std::vector<Vertex>   modelVertices(attrib.vertices.size() * 3);
+		std::vector<Vertex>   modelVertices{};
 		std::vector<uint32_t> modelIndices{};
 
-		for (const auto &shape: shapes) {
-			size_t indexOffset{0};
+		const auto &shape{shapes[0]};
+		for (auto item: shape.mesh.indices) { modelIndices.push_back(item.vertex_index); }
+		for (int idx{0}; idx < attrib.vertices.size(); idx += 3) {
+			const float vx{static_cast<float>(attrib.vertices[idx + 0])};
+			const float vy{static_cast<float>(attrib.vertices[idx + 1])};
+			const float vz{static_cast<float>(attrib.vertices[idx + 2])};
 
-			for (const auto &faceVertexCount: shape.mesh.num_face_vertices) {
-				for (size_t vertex{0}; vertex < faceVertexCount; ++vertex) {
-					tinyobj::index_t idx{shape.mesh.indices[indexOffset + vertex]};
-					tinyobj::real_t  vx{attrib.vertices[3 * idx.vertex_index + 0]};
-					tinyobj::real_t  vy{attrib.vertices[3 * idx.vertex_index + 1]};
-					tinyobj::real_t  vz{attrib.vertices[3 * idx.vertex_index + 2]};
-
-					// negative = no data
-					if (idx.normal_index >= 0) {
-						tinyobj::real_t nx{attrib.normals[3 * idx.normal_index + 0]};
-						tinyobj::real_t ny{attrib.normals[3 * idx.normal_index + 1]};
-						tinyobj::real_t nz{attrib.normals[3 * idx.normal_index + 2]};
-					}
-
-					// TODO: attrib.texcoords, tx and ty
-
-					modelVertices.emplace_back(glm::vec3{vx, vy, vz}, glm::vec3{1.f, 1.f, 1.f});
-					modelIndices.emplace_back(idx.vertex_index);
-				}
-				indexOffset += faceVertexCount;
-			}
+			modelVertices.emplace_back(glm::vec3{vx, vy, vz});
 		}
 
 		return Model{physicalDevice, *this, modelVertices, modelIndices};
 	}
 
 	void Device::FillRtDescriptorSet() {
-		VkAccelerationStructureKHR                   tlas{GetTlas().accStructHandle};
 		VkWriteDescriptorSetAccelerationStructureKHR descASInfo{
 		        VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR
 		};
 		descASInfo.accelerationStructureCount = 1;
-		descASInfo.pAccelerationStructures    = &tlas;
+		descASInfo.pAccelerationStructures    = &m_Tlas->accStructHandle;
 
-		// TODO: taking a bet here with the image view
 		VkDescriptorImageInfo imageInfo{{}, m_Swapchain.GetOutputImageView(), VK_IMAGE_LAYOUT_GENERAL};
 
 		std::vector<VkWriteDescriptorSet> writeDescriptorSets{};
@@ -932,20 +988,6 @@ namespace roing::vk {
 		vkUpdateDescriptorSets(
 		        m_Device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr
 		);
-
-		// Camera matrices
-		m_DescriptorSetLayoutBindings.emplace_back(
-		        static_cast<uint32_t>(SceneBindings::eGlobals), VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
-		        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
-		);
-
-		// Obj descriptions
-		m_DescriptorSetLayoutBindings.emplace_back(
-		        static_cast<uint32_t>(SceneBindings::eObjDescs), VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1,
-		        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
-		);
-
-		// TODO: Textures
 	}
 
 	void Device::CreatePostDescriptorSet() {

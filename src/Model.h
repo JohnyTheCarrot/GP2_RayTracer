@@ -52,6 +52,12 @@ namespace roing {
 		[[nodiscard]]
 		BlasInput ObjectToVkGeometry() const noexcept;
 
+		[[nodiscard]]
+		VkDeviceAddress GetVertexBufferAddress() const noexcept;
+
+		[[nodiscard]]
+		VkDeviceAddress GetIndexBufferAddress() const noexcept;
+
 	private:
 		static vk::Buffer
 		CreateVertexBuffer(VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<Vertex> &vertices);

@@ -96,7 +96,7 @@ namespace roing {
 		triangles.vertexStride             = sizeof(Vertex);
 		triangles.indexType                = VK_INDEX_TYPE_UINT32;
 		triangles.indexData.deviceAddress  = indexBufferAddress;
-		triangles.maxVertex                = m_IndexCount - 1;
+		triangles.maxVertex                = m_VertexCount - 1;
 
 		VkAccelerationStructureGeometryKHR asGeom{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
 		asGeom.geometryType       = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
@@ -114,5 +114,13 @@ namespace roing {
 		blasInput.accStructBuildOffsetInfo.emplace_back(offset);
 
 		return blasInput;
+	}
+
+	VkDeviceAddress Model::GetVertexBufferAddress() const noexcept {
+		return m_VertexBuffer.GetDeviceAddress();
+	}
+
+	VkDeviceAddress Model::GetIndexBufferAddress() const noexcept {
+		return m_IndexBuffer.GetDeviceAddress();
 	}
 }// namespace roing

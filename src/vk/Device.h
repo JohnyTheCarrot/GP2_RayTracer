@@ -5,6 +5,7 @@
 #include "../ModelInstance.h"
 #include "AccelerationStructure.h"
 #include "Buffer.h"
+#include "HostDevice.h"
 #include "QueueFamilyIndices.h"
 #include "Surface.h"
 #include "Swapchain.h"
@@ -13,10 +14,6 @@
 #include <vulkan/vulkan.h>
 
 namespace roing::vk {
-	enum class SceneBindings { eGlobals = 0, eObjDescs = 1, eTextures = 2, eImplicits = 3 };
-	enum class RtxBindings { eTlas = 0, eOutImage = 1 };
-	enum class DescriptorSupport : uint32_t { CORE_1_0 = 0, CORE_1_2 = 1, INDEXING_EXT = 2 };
-
 	struct ModelLoadData final {
 		std::string fileName;
 		glm::mat4   transform;
@@ -200,6 +197,12 @@ namespace roing::vk {
 		);
 
 		[[nodiscard]]
+		static VkWriteDescriptorSet MakeWrite(
+		        const std::vector<VkDescriptorSetLayoutBinding> &bindings, VkDescriptorSet dstSet, uint32_t dstBinding,
+		        const VkDescriptorBufferInfo *pBufferInfo, uint32_t arrayElement
+		);
+
+		[[nodiscard]]
 		VkDeviceAddress GetBlasDeviceAddress(uint32_t blasId) const;
 
 		void CreateBottomLevelAccelerationStructure(VkPhysicalDevice physicalDevice, const std::vector<Model> &models);
@@ -272,6 +275,8 @@ namespace roing::vk {
 		std::vector<ModelInstance>              m_ModelInstances;
 		std::vector<BuildAccelerationStructure> m_Blas{};
 		std::optional<AccelerationStructure>    m_Tlas{};
+		std::vector<ObjDesc>                    m_ObjDescriptors{};
+		Buffer                                  m_ObjDescBuffer;
 	};
 }// namespace roing::vk
 

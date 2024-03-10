@@ -5,6 +5,7 @@
 #include "QueueFamilyIndices.h"
 #include "RayTracingExtFunctions.h"
 #include "src/utils/debug.h"
+#include <glm/ext/matrix_clip_space.hpp>
 #include <vulkan/vk_enum_string_helper.h>
 
 namespace roing::vk {
@@ -19,6 +20,7 @@ namespace roing::vk {
 		DEBUG("Destroying swapchain...");
 		CleanupOnlySwapchain();
 		m_SBTBuffer.Destroy();
+		m_GlobalsBuffer.Destroy();
 
 		for (size_t i{0}; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 			vkDestroySemaphore(m_pParentDevice->GetHandle(), m_ImageAvailableSemaphores[i], nullptr);
@@ -275,6 +277,8 @@ namespace roing::vk {
 			throw std::runtime_error{std::string{"Failed to begin command buffer: "} + string_VkResult(result)};
 		}
 
+		UpdateUniformBuffer(commandBuffer);
+
 		uint32_t presentFamilyIndex{m_pParentDevice->GetQueueFamilyIndices().presentFamily.value()};
 
 		VkImageSubresourceRange imageSubresourceRange{
@@ -298,7 +302,7 @@ namespace roing::vk {
 		        .subresourceRange    = imageSubresourceRange
 		};
 
-		m_PushConstantRay.clearColor     = glm::vec4{1.0f, 0.0f, 0.0f, 1.0f};
+		m_PushConstantRay.clearColor     = glm::vec4{1.0f, 1.0f, 0.0f, 1.0f};
 		m_PushConstantRay.lightPosition  = glm::vec3{10.f, 15.f, 8.f};
 		m_PushConstantRay.lightIntensity = 100.f;
 		m_PushConstantRay.lightType      = 0;
@@ -361,6 +365,50 @@ namespace roing::vk {
 		vkCmdEndRenderPass(commandBuffer);
 
 		vkEndCommandBuffer(commandBuffer);
+	}
+
+	void Swapchain::UpdateUniformBuffer(VkCommandBuffer commandBuffer) {
+		const float aspectRatio{
+		        static_cast<float>(m_SwapChainExtent.width) / static_cast<float>(m_SwapChainExtent.height)
+		};
+
+		GlobalUniforms hostUBO{};
+		// TODO: camera class
+		const glm::mat4 view{1.f};
+		glm::mat4       projection{glm::perspectiveRH_ZO(glm::radians(45.0f), aspectRatio, 0.1f, 1000.f)};
+		projection[1][1] *= -1.f;// inverting y for vulkan
+
+		hostUBO.viewProj    = projection * view;
+		hostUBO.viewInverse = glm::inverse(view);
+		hostUBO.projInverse = glm::inverse(projection);
+
+		auto uboUsageStages{VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR};
+
+		VkBufferMemoryBarrier beforeBarrier{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+		beforeBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		beforeBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		beforeBarrier.buffer        = m_GlobalsBuffer.GetHandle();
+		beforeBarrier.offset        = 0;
+		beforeBarrier.size          = sizeof(hostUBO);
+		vkCmdPipelineBarrier(
+		        commandBuffer, uboUsageStages, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_DEPENDENCY_DEVICE_GROUP_BIT, 0,
+		        nullptr, 1, &beforeBarrier, 0, nullptr
+		);
+
+		// Schedule the host-to-device upload. (hostUBO is copied into the cmd
+		// buffer, so it is okay to deallocate when the function returns).
+		vkCmdUpdateBuffer(commandBuffer, m_GlobalsBuffer.GetHandle(), 0, sizeof(GlobalUniforms), &hostUBO);
+
+		VkBufferMemoryBarrier afterBarrier{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+		afterBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		afterBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		afterBarrier.buffer        = m_GlobalsBuffer.GetHandle();
+		afterBarrier.offset        = 0;
+		afterBarrier.size          = sizeof(hostUBO);
+		vkCmdPipelineBarrier(
+		        commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, uboUsageStages, VK_DEPENDENCY_DEVICE_GROUP_BIT, 0,
+		        nullptr, 1, &afterBarrier, 0, nullptr
+		);
 	}
 
 	void Swapchain::CreateCommandBuffers() {
@@ -619,7 +667,7 @@ namespace roing::vk {
 		rayPipelineInfo.groupCount = m_ShaderGroups.size();
 		rayPipelineInfo.pGroups    = m_ShaderGroups.data();
 
-		rayPipelineInfo.maxPipelineRayRecursionDepth = 1;// ray depth
+		rayPipelineInfo.maxPipelineRayRecursionDepth = 2;// ray depth
 		rayPipelineInfo.layout                       = m_PipelineLayout;
 
 		roing::vk::vkCreateRayTracingPipelinesKHR(
@@ -655,6 +703,10 @@ namespace roing::vk {
 	        VkDescriptorSetLayout descriptorSetLayout
 	) {
 		Init(pParentDevice, window, surface, physicalDevice);
+		m_GlobalsBuffer = pParentDevice->CreateBuffer(
+		        physicalDevice, sizeof(GlobalUniforms),
+		        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+		);
 
 		CreateImageViews();
 		//		CreateRenderPass();
@@ -673,7 +725,7 @@ namespace roing::vk {
 		Init(pParentDevice, window, surface, physicalDevice);
 
 		CreateImageViews();
-		CreateFramebuffers();
+		//		CreateFramebuffers();
 	}
 
 	void Swapchain::CreateRtShaderBindingTable(VkPhysicalDevice physicalDevice) {

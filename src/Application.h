@@ -13,7 +13,8 @@
 #include "vk/Window.h"
 #include <GLFW/glfw3.h>
 #include <array>
-#include <glm\glm.hpp>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <optional>
 #include <string_view>
 #include <vector>
@@ -30,7 +31,13 @@ namespace roing {
 		    , m_Instance{}
 		    , m_Surface{m_Instance, m_Window}
 		    , m_PhysicalDevice{m_Instance.PickPhysicalDevice(m_Surface)}
-		    , m_Device{m_Surface, m_PhysicalDevice, m_Window, {{"tractor.obj", glm::mat4{1.f}}}} {};
+		    , m_Device{
+		              m_Surface,
+		              m_PhysicalDevice,
+		              m_Window,
+		              {{"medieval_building.obj", glm::translate(glm::mat4{1.f}, glm::vec3{0, 0, -10.f})},
+		               {"tractor.obj", glm::translate(glm::mat4{1.f}, glm::vec3{5, 0, -10.f})}}
+		      } {};
 
 		~Application() {
 			DEBUG("Terminating application");
@@ -49,8 +56,7 @@ namespace roing {
 		static constexpr uint32_t         WINDOW_WIDTH{800}, WINDOW_HEIGHT{600};
 		static constexpr std::string_view WINDOW_TITLE{"Vulkan"};
 		const std::vector<Vertex>         VERTICES{
-                Vertex{{-0.5f, -0.5f, 0.f}, {1.0f, 0.0f, 0.0f}}, Vertex{{0.5f, -0.5f, 0.f}, {0.0f, 1.0f, 0.0f}},
-                Vertex{{0.5f, 0.5f, 0.f}, {0.0f, 0.0f, 1.0f}}
+                Vertex{{-0.5f, -0.5f, 0.f}}, Vertex{{0.5f, -0.5f, 0.f}}, Vertex{{0.5f, 0.5f, 0.f}}
         };
 		const std::vector<uint32_t> INDICES{0, 1, 2, 2, 3, 0};
 
