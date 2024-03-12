@@ -1,5 +1,6 @@
 #include "Memory.h"
 #include "Device.h"
+#include "src/utils/debug.h"
 
 namespace roing::vk {
 	Memory::Memory(const Device &device, VkDeviceMemory memory)
@@ -15,8 +16,10 @@ namespace roing::vk {
 		if (m_Memory == VK_NULL_HANDLE)
 			return;
 
+		//		StartDestruction("Memory");
 		vkFreeMemory(m_Device, m_Memory, nullptr);
 		m_Memory = VK_NULL_HANDLE;
+		//		EndDestruction("Memory");
 	}
 
 	Memory::Memory(Memory &&other) noexcept

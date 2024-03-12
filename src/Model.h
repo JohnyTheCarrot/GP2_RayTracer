@@ -11,7 +11,8 @@ namespace roing {
 
 	namespace vk {
 		class Device;
-	}
+		class CommandPool;
+	}// namespace vk
 
 	struct BlasInput final {
 		std::vector<VkAccelerationStructureGeometryKHR>       accStructGeometry;
@@ -21,8 +22,8 @@ namespace roing {
 
 	class Model final {
 	public:
-		Model(VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<Vertex> &vertices,
-		      const std::vector<uint32_t> &indices);
+		Model(VkPhysicalDevice physicalDevice, const vk::Device &device, const vk::CommandPool &commandPool,
+		      const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
 
 		Model(const Model &)            = delete;
 		Model &operator=(const Model &) = delete;
@@ -58,11 +59,21 @@ namespace roing {
 		[[nodiscard]]
 		VkDeviceAddress GetIndexBufferAddress() const noexcept;
 
+		[[nodiscard]]
+		static Model LoadModel(
+		        const vk::Device &device, const vk::CommandPool &commandPool, VkPhysicalDevice physicalDevice,
+		        const std::string &fileName
+		);
+
 	private:
-		static vk::Buffer
-		CreateVertexBuffer(VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<Vertex> &vertices);
-		static vk::Buffer
-		CreateIndexBuffer(VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<uint32_t> &indices);
+		static vk::Buffer CreateVertexBuffer(
+		        VkPhysicalDevice physicalDevice, const vk::Device &device, const vk::CommandPool &commandPool,
+		        const std::vector<Vertex> &vertices
+		);
+		static vk::Buffer CreateIndexBuffer(
+		        VkPhysicalDevice physicalDevice, vk::Device &device, const vk::CommandPool &commandPool,
+		        const std::vector<uint32_t> &indices
+		);
 
 		VkDevice   m_Device{};
 		vk::Buffer m_VertexBuffer;

@@ -30,11 +30,11 @@ namespace roing::vk {
 		if (!m_pWindow)
 			return;
 
-		DEBUG("Destroying window...");
+		StartDestruction("Window");
 
 		glfwDestroyWindow(m_pWindow);
 		m_pWindow = nullptr;
 
-		DEBUG("Window destroyed");
+		EndDestruction("Window");
 	}
 }// namespace roing::vk

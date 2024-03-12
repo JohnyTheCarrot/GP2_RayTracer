@@ -17,9 +17,9 @@ namespace roing::vk {
 		DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessenger, nullptr);
 #endif
 
-		DEBUG("Destroying instance...");
+		StartDestruction("Instance");
 		vkDestroyInstance(m_Instance, nullptr);
-		DEBUG("Instance destroyed");
+		EndDestruction("Instance");
 	}
 
 	Instance::Instance() {
@@ -59,7 +59,7 @@ namespace roing::vk {
 		createInfo.pNext = nullptr;
 #endif
 
-		PrintAvailableInstanceExtensions();
+		//		PrintAvailableInstanceExtensions();
 
 		const auto extensions{GetRequiredExtensions()};
 		createInfo.enabledExtensionCount   = static_cast<uint32_t>(extensions.size());
@@ -235,14 +235,14 @@ namespace roing::vk {
 		std::vector<VkExtensionProperties> availableExtensions(extensionCount);
 		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
 
-		std::cout << "Available device extensions:\n";
-
-		std::transform(
-		        availableExtensions.cbegin(), availableExtensions.cend(),
-		        std::ostream_iterator<const char *>{std::cout, "\n"},
-		        [](const VkExtensionProperties &ext) { return ext.extensionName; }
-		);
-		std::cout << '\n';
+		//		std::cout << "Available device extensions:\n";
+		//
+		//		std::transform(
+		//		        availableExtensions.cbegin(), availableExtensions.cend(),
+		//		        std::ostream_iterator<const char *>{std::cout, "\n"},
+		//		        [](const VkExtensionProperties &ext) { return ext.extensionName; }
+		//		);
+		//		std::cout << '\n';
 
 		std::set<std::string_view> requiredExtensions(
 		        vk::Device::DEVICE_EXTENSIONS.cbegin(), vk::Device::DEVICE_EXTENSIONS.cend()

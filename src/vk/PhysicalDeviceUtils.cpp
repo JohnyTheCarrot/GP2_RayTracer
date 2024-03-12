@@ -29,4 +29,14 @@ namespace roing::vk::physical_device {
 
 		return indices;
 	}
+
+	VkPhysicalDeviceRayTracingPipelinePropertiesKHR GetPhysicalDeviceProperties(VkPhysicalDevice hPhysicalDevice) {
+		VkPhysicalDeviceRayTracingPipelinePropertiesKHR physicalDeviceProperties{};
+
+		VkPhysicalDeviceProperties2 properties2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+		properties2.pNext = &physicalDeviceProperties;
+		vkGetPhysicalDeviceProperties2(hPhysicalDevice, &properties2);
+
+		return physicalDeviceProperties;
+	}
 }// namespace roing::vk::physical_device

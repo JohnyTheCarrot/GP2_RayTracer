@@ -22,6 +22,27 @@ namespace roing::vk {
 	        const VkStridedDeviceAddressRegionKHR *pCallableShaderBindingTable, uint32_t width, uint32_t height,
 	        uint32_t depth
 	);
+
+	void vkCmdBuildAccelerationStructuresKHR(
+	        VkDevice device, VkCommandBuffer commandBuffer, uint32_t infoCount,
+	        const VkAccelerationStructureBuildGeometryInfoKHR     *pInfos,
+	        const VkAccelerationStructureBuildRangeInfoKHR *const *ppBuildRangeInfos
+	);
+
+	void vkCmdWriteAccelerationStructuresPropertiesKHR(
+	        VkDevice device, VkCommandBuffer commandBuffer, uint32_t accelerationStructureCount,
+	        const VkAccelerationStructureKHR *pAccelerationStructures, VkQueryType queryType, VkQueryPool queryPool,
+	        uint32_t firstQuery
+	);
+
+	VkResult vkCreateAccelerationStructureKHR(
+	        VkDevice device, const VkAccelerationStructureCreateInfoKHR *pCreateInfo,
+	        const VkAllocationCallbacks *pAllocator, VkAccelerationStructureKHR *pAccelerationStructure
+	);
+
+	void vkDestroyAccelerationStructureKHR(
+	        VkDevice device, VkAccelerationStructureKHR accelerationStructure, const VkAllocationCallbacks *pAllocator
+	);
 }// namespace roing::vk
 
 #endif//PORTAL2RAYTRACED_RAYTRACINGEXTFUNCTIONS_H

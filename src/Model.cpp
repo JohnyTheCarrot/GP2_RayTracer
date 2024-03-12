@@ -1,21 +1,25 @@
 #include "Model.h"
+#include "tiny_obj_loader.h"
 #include "vk/Buffer.h"
+#include "vk/CommandPool.h"
 #include "vk/Device.h"
+#include <iostream>
 
 namespace roing {
 	Model::Model(
-	        VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<Vertex> &vertices,
-	        const std::vector<uint32_t> &indices
+	        VkPhysicalDevice physicalDevice, const vk::Device &device, const vk::CommandPool &commandPool,
+	        const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices
 	)
 	    : m_Device{device.GetHandle()}
-	    , m_VertexBuffer{CreateVertexBuffer(physicalDevice, device, vertices)}
-	    , m_IndexBuffer{CreateIndexBuffer(physicalDevice, device, indices)}
+	    , m_VertexBuffer{CreateVertexBuffer(physicalDevice, device, commandPool, vertices)}
+	    , m_IndexBuffer{CreateIndexBuffer(physicalDevice, device, commandPool, indices)}
 	    , m_VertexCount{static_cast<uint32_t>(vertices.size())}
 	    , m_IndexCount{static_cast<uint32_t>(indices.size())} {
 	}
 
 	vk::Buffer Model::CreateVertexBuffer(
-	        VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<Vertex> &vertices
+	        VkPhysicalDevice physicalDevice, const vk::Device &device, const vk::CommandPool &commandPool,
+	        const std::vector<Vertex> &vertices
 	) {
 		VkDeviceSize bufferSize{sizeof(Vertex) * vertices.size()};
 
@@ -38,13 +42,14 @@ namespace roing {
 		        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
 		)};
 
-		device.CopyBuffer(stagingBuffer.GetHandle(), buffer.GetHandle(), bufferSize);
+		device.CopyBuffer(commandPool, stagingBuffer.GetHandle(), buffer.GetHandle(), bufferSize);
 
 		return buffer;
 	}
 
 	vk::Buffer Model::CreateIndexBuffer(
-	        VkPhysicalDevice physicalDevice, vk::Device &device, const std::vector<uint32_t> &indices
+	        VkPhysicalDevice physicalDevice, vk::Device &device, const vk::CommandPool &commandPool,
+	        const std::vector<uint32_t> &indices
 	) {
 		VkDeviceSize bufferSize{sizeof(indices[0]) * indices.size()};
 
@@ -67,7 +72,7 @@ namespace roing {
 		        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
 		)};
 
-		device.CopyBuffer(stagingBuffer.GetHandle(), buffer.GetHandle(), bufferSize);
+		device.CopyBuffer(commandPool, stagingBuffer.GetHandle(), buffer.GetHandle(), bufferSize);
 
 		return buffer;
 	}
@@ -122,5 +127,56 @@ namespace roing {
 
 	VkDeviceAddress Model::GetIndexBufferAddress() const noexcept {
 		return m_IndexBuffer.GetDeviceAddress();
+	}
+
+	Model Model::LoadModel(
+	        const vk::Device &device, const vk::CommandPool &commandPool, VkPhysicalDevice physicalDevice,
+	        const std::string &fileName
+	) {
+		tinyobj::ObjReaderConfig readerConfig{};
+		readerConfig.mtl_search_path = "./";
+
+		tinyobj::ObjReader reader;
+
+		if (!reader.ParseFromFile("resources/" + fileName, readerConfig)) {
+			if (!reader.Error().empty()) {
+				throw std::runtime_error(reader.Error());
+			}
+			throw std::runtime_error("failed to parse obj file");
+		}
+
+		if (!reader.Warning().empty()) {
+			std::cerr << "TinyObjReader warning: " << reader.Warning();
+		}
+
+		const auto &attrib{reader.GetAttrib()};
+		const auto &shapes{reader.GetShapes()};
+		//		const auto &materials{reader.GetMaterials()};
+
+		std::vector<Vertex>   modelVertices{};
+		std::vector<uint32_t> modelIndices{};
+
+		for (const auto &shape: shapes) {
+			modelVertices.reserve(shape.mesh.indices.size() + modelVertices.size());
+			modelIndices.reserve(shape.mesh.indices.size() + modelIndices.size());
+
+			for (const auto &index: shape.mesh.indices) {
+				Vertex vertex{};
+				vertex.pos.x = attrib.vertices[3 * index.vertex_index + 0];
+				vertex.pos.y = attrib.vertices[3 * index.vertex_index + 1];
+				vertex.pos.z = attrib.vertices[3 * index.vertex_index + 2];
+
+				if (!attrib.normals.empty() && index.normal_index >= 0) {
+					vertex.norm.x = attrib.normals[3 * index.normal_index + 0];
+					vertex.norm.y = attrib.normals[3 * index.normal_index + 1];
+					vertex.norm.z = attrib.normals[3 * index.normal_index + 2];
+				}
+
+				modelVertices.emplace_back(vertex);
+				modelIndices.push_back(static_cast<int>(modelIndices.size()));
+			}
+		}
+
+		return Model{physicalDevice, device, commandPool, modelVertices, modelIndices};
 	}
 }// namespace roing

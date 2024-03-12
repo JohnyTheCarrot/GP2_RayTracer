@@ -12,10 +12,11 @@ namespace roing::vk {
 		if (m_Buffer == VK_NULL_HANDLE)
 			return;
 
-		DEBUG("Destroying buffer and freeing buffer memory");
+		//		StartDestruction("Buffer");
 		m_BufferMemory.Destroy();
 		vkDestroyBuffer(m_Device, m_Buffer, nullptr);
 		m_Buffer = VK_NULL_HANDLE;
+		//		EndDestruction("Buffer");
 	};
 
 	Buffer::Buffer(const Device &device, VkBuffer buffer, VkDeviceMemory memory)

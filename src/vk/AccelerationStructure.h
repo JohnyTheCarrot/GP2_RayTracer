@@ -2,23 +2,20 @@
 #define PORTAL2RAYTRACED_ACCELERATIONSTRUCTURE_H
 
 #include "Buffer.h"
+#include "raii.h"
 #include <vulkan/vulkan.hpp>
 
 namespace roing::vk {
 
+	class Device;
+
 	struct AccelerationStructure final {
-		VkDevice                   deviceHandle{};
-		VkAccelerationStructureKHR accStructHandle{};
-		Buffer                     buffer{};
+		AccelerationStructureHandle m_hAccStruct;
+		Buffer                      m_Buffer{};
 
-		AccelerationStructure() = default;
-		~AccelerationStructure();
-
-		AccelerationStructure(const AccelerationStructure &)            = delete;
-		AccelerationStructure &operator=(const AccelerationStructure &) = delete;
-
-		AccelerationStructure(AccelerationStructure &&) noexcept;
-		AccelerationStructure &operator=(AccelerationStructure &&) noexcept;
+		AccelerationStructure(
+		        const Device &device, VkPhysicalDevice physicalDevice, VkAccelerationStructureCreateInfoKHR &createInfo
+		);
 	};
 
 }// namespace roing::vk

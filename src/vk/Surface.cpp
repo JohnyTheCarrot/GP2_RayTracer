@@ -10,9 +10,9 @@ namespace roing::vk {
 		if (m_Surface == VK_NULL_HANDLE)
 			return;
 
-		DEBUG("Destroying surface...");
+		StartDestruction("Surface");
 		vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
-		DEBUG("Surface destroyed");
+		EndDestruction("Surface");
 	}
 
 	Surface::Surface(const Instance &instance, const Window &window)

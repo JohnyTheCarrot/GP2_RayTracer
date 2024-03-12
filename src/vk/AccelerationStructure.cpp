@@ -3,28 +3,19 @@
 #include "src/utils/debug.h"
 
 namespace roing::vk {
-	AccelerationStructure::~AccelerationStructure() {
-		if (accStructHandle == VK_NULL_HANDLE)
-			return;
+	AccelerationStructure::AccelerationStructure(
+	        const Device &device, VkPhysicalDevice physicalDevice, VkAccelerationStructureCreateInfoKHR &createInfo
+	)
+	    : m_hAccStruct{VK_NULL_HANDLE, AccelerationStructureDestroyer(device.GetHandle())} {
+		m_Buffer = device.CreateBuffer(
+		        physicalDevice, createInfo.size,
+		        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+		);
 
-		DEBUG("Destroying acceleration structure...");
-		roing::vk::vkDestroyAccelerationStructureKHR(deviceHandle, accStructHandle, nullptr);
-		DEBUG("Destroyed acceleration structure");
-	}
+		createInfo.buffer = m_Buffer.GetHandle();
 
-	AccelerationStructure::AccelerationStructure(AccelerationStructure &&other) noexcept
-	    : deviceHandle{other.deviceHandle}
-	    , accStructHandle{other.accStructHandle}
-	    , buffer{std::move(other.buffer)} {
-		other.accStructHandle = nullptr;
-	}
-
-	AccelerationStructure &AccelerationStructure::operator=(AccelerationStructure &&other) noexcept {
-		deviceHandle    = other.deviceHandle;
-		accStructHandle = other.accStructHandle;
-		buffer          = std::move(other.buffer);
-
-		other.accStructHandle = nullptr;
-		return *this;
+		AccelerationStructureHandle::pointer hAccStruct;
+		roing::vk::vkCreateAccelerationStructureKHR(device.GetHandle(), &createInfo, nullptr, &hAccStruct);
+		m_hAccStruct.reset(hAccStruct);
 	}
 }// namespace roing::vk

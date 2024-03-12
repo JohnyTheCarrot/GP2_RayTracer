@@ -8,6 +8,9 @@
 namespace roing::vk::physical_device {
 	[[nodiscard]]
 	QueueFamilyIndices FindQueueFamilies(const Surface &surface, VkPhysicalDevice device);
-}
+
+	[[nodiscard]]
+	VkPhysicalDeviceRayTracingPipelinePropertiesKHR GetPhysicalDeviceProperties(VkPhysicalDevice hPhysicalDevice);
+}// namespace roing::vk::physical_device
 
 #endif//PORTAL2RAYTRACED_PHYSICALDEVICEUTILS_H

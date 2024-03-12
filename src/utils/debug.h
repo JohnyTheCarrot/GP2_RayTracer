@@ -5,7 +5,14 @@
 //#define DEBUG(x)
 //#else
 #include <iostream>
-#define DEBUG(x) std::cout << "[DEBUG]: " << x << std::endl
+extern int g_DebugDepth;
+
+#define DEBUG(x) std::cout << "[DEBUG]: " << std::string(g_DebugDepth, '-') << x << std::endl
+
+void StartDestruction(std::string_view name);
+
+void EndDestruction(std::string_view name);
+
 //#endif
 
 #endif//PORTAL2RAYTRACED_DEBUG_H
